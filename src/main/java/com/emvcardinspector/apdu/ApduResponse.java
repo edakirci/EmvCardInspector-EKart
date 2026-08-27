@@ -1,6 +1,7 @@
 package com.emvcardinspector.apdu;
 
 import javax.smartcardio.ResponseAPDU;
+import java.util.Arrays;
 import java.util.Objects;
 
 /** Separates response data from the trailing SW1/SW2 status word. */
@@ -29,6 +30,13 @@ public record ApduResponse(byte[] data, int statusWord) {
 
     public int sw2() {
         return statusWord & 0xFF;
+    }
+
+    public byte[] bytes() {
+        byte[] responseBytes = Arrays.copyOf(data, data.length + 2);
+        responseBytes[data.length] = (byte) sw1();
+        responseBytes[data.length + 1] = (byte) sw2();
+        return responseBytes;
     }
 
     public boolean isSuccess() {

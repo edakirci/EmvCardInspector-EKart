@@ -31,4 +31,19 @@ public enum StatusWord {
     public static Optional<StatusWord> fromCode(int code) {
         return Arrays.stream(values()).filter(value -> value.code == code).findFirst();
     }
+
+    public static String describe(int code) {
+        Optional<StatusWord> knownStatus = fromCode(code);
+        if (knownStatus.isPresent()) {
+            return knownStatus.get().description();
+        }
+
+        int sw1 = (code >>> 8) & 0xFF;
+        int sw2 = code & 0xFF;
+        return switch (sw1) {
+            case 0x61 -> "More response bytes available (SW2=%02X)".formatted(sw2);
+            case 0x6C -> "Wrong Le; expected length is %02X".formatted(sw2);
+            default -> "Unknown status word";
+        };
+    }
 }
