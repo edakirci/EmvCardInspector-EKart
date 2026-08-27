@@ -52,6 +52,11 @@ Bağlantı kurulduktan sonra uygulama iki işlem sunar:
 açıklaması ve işlem süresi gösterilir. Bu aşamada cevap verisi henüz BER-TLV
 olarak ayrıştırılmaz.
 
+PPSE cevap yorumlama katmanı, BER-TLV ağacındaki `61` Application Template
+nesnelerinden `4F` AID, isteğe bağlı `50` Application Label ve `87` Application
+Priority Indicator alanlarını doğrulayarak çıkarabilir. Bu katman henüz komut
+satırı akışına bağlanmamıştır.
+
 ## Planlanan katmanlar
 
 - `reader`: PC/SC okuyucu keşfi ve kart bağlantısı
