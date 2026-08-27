@@ -17,6 +17,7 @@ public final class EmvTagDictionary {
     public static EmvTagDictionary standard() {
         return new EmvTagDictionary(Map.of(
                 "6F", new EmvTag("6F", "FCI Template", "File Control Information template", false),
+                "84", new EmvTag("84", "Dedicated File Name", "Selected PPSE or application name", false),
                 "A5", new EmvTag("A5", "FCI Proprietary Template", "Proprietary FCI data", false),
                 "BF0C", new EmvTag("BF0C", "FCI Issuer Discretionary Data", "Issuer discretionary FCI data", false),
                 "61", new EmvTag("61", "Application Template", "One advertised payment application", false),

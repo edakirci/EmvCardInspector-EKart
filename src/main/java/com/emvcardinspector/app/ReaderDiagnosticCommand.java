@@ -3,9 +3,16 @@ package com.emvcardinspector.app;
 import com.emvcardinspector.apdu.ApduCommand;
 import com.emvcardinspector.apdu.ApduResponse;
 import com.emvcardinspector.apdu.StatusWord;
+import com.emvcardinspector.emv.EmvApplication;
 import com.emvcardinspector.emv.EmvCommands;
+import com.emvcardinspector.emv.EmvDataException;
+import com.emvcardinspector.emv.EmvTagDictionary;
+import com.emvcardinspector.emv.PpseResponse;
+import com.emvcardinspector.emv.PpseResponseParser;
 import com.emvcardinspector.reader.CardReaderService;
 import com.emvcardinspector.reader.CardSession;
+import com.emvcardinspector.tlv.TlvNode;
+import com.emvcardinspector.tlv.TlvParseException;
 import com.emvcardinspector.util.HexUtils;
 
 import javax.smartcardio.CardException;
@@ -21,6 +28,8 @@ public final class ReaderDiagnosticCommand {
     private final Scanner input;
     private final PrintStream output;
     private final Duration cardWaitTimeout;
+    private final PpseResponseParser ppseResponseParser;
+    private final EmvTagDictionary tagDictionary;
 
     public ReaderDiagnosticCommand(
             CardReaderService readerService,
@@ -31,6 +40,8 @@ public final class ReaderDiagnosticCommand {
         this.input = Objects.requireNonNull(input, "input");
         this.output = Objects.requireNonNull(output, "output");
         this.cardWaitTimeout = Objects.requireNonNull(cardWaitTimeout, "cardWaitTimeout");
+        this.ppseResponseParser = new PpseResponseParser();
+        this.tagDictionary = EmvTagDictionary.standard();
     }
 
     public int run() {
@@ -96,8 +107,7 @@ public final class ReaderDiagnosticCommand {
                     return 0;
                 }
 
-                executeSelectPpse(connection);
-                return 0;
+                return executeSelectPpse(connection);
             }
         } catch (CardException error) {
             output.println("Connection : FAILED");
@@ -109,7 +119,7 @@ public final class ReaderDiagnosticCommand {
         }
     }
 
-    private void executeSelectPpse(CardSession connection) throws CardException {
+    private int executeSelectPpse(CardSession connection) throws CardException {
         ApduCommand command = EmvCommands.selectPpse();
         long startedAt = System.nanoTime();
         ApduResponse response = connection.transmit(command);
@@ -126,6 +136,76 @@ public final class ReaderDiagnosticCommand {
         output.printf("Status Word   : %04X%n", response.statusWord());
         output.printf("Status        : %s%n", StatusWord.describe(response.statusWord()));
         output.printf("Duration      : %d ms%n", durationMillis);
+
+        if (!response.isSuccess()) {
+            output.println("TLV Parsing   : SKIPPED");
+            output.printf("Reason        : status word %04X is not successful%n", response.statusWord());
+            if (response.data().length == 0) {
+                output.println("                response data is empty");
+            }
+            return 0;
+        }
+        if (response.data().length == 0) {
+            output.println("TLV Parsing   : SKIPPED");
+            output.println("Reason        : response data is empty");
+            return 0;
+        }
+
+        try {
+            PpseResponse ppseResponse = ppseResponseParser.parse(response.data());
+            output.println("TLV Parsing   : SUCCESS");
+            printTlvTree(ppseResponse.tlvNodes());
+            printApplications(ppseResponse.applications());
+            return 0;
+        } catch (TlvParseException | EmvDataException error) {
+            output.println("TLV Parsing   : FAILED");
+            output.println("Parse Error   : " + error.getMessage());
+            return 4;
+        }
+    }
+
+    private void printTlvTree(List<TlvNode> nodes) {
+        output.println();
+        output.println("TLV Tree:");
+        for (TlvNode node : nodes) {
+            printTlvNode(node, 0);
+        }
+    }
+
+    private void printTlvNode(TlvNode node, int depth) {
+        String indent = "  ".repeat(depth);
+        String name = tagDictionary.find(node.tag().hex())
+                .map(tag -> tag.name())
+                .orElse("Unknown EMV tag");
+        String type = node.tag().constructed() ? "constructed" : "primitive";
+        output.printf("%s- %s | %s | %s | length=%d | offset=%d%n",
+                indent,
+                node.tag().hex(),
+                name,
+                type,
+                node.length(),
+                node.offset());
+        if (!node.tag().constructed()) {
+            output.printf("%s  Value: %s%n", indent, HexUtils.toHex(node.value()));
+        }
+        for (TlvNode child : node.children()) {
+            printTlvNode(child, depth + 1);
+        }
+    }
+
+    private void printApplications(List<EmvApplication> applications) {
+        output.println();
+        output.printf("Payment Applications: %d%n", applications.size());
+        for (int index = 0; index < applications.size(); index++) {
+            EmvApplication application = applications.get(index);
+            output.printf("[%d] AID                : %s%n", index, application.aidHex());
+            output.printf("    Application Label  : %s%n",
+                    application.label().orElse("<not provided>"));
+            output.printf("    Priority Indicator : %s%n",
+                    application.priorityIndicator().isPresent()
+                            ? "%02X".formatted(application.priorityIndicator().getAsInt())
+                            : "<not provided>");
+        }
     }
 
     private static Integer parseSelection(String text, int readerCount) {

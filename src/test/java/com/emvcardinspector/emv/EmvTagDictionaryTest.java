@@ -12,6 +12,7 @@ class EmvTagDictionaryTest {
         EmvTagDictionary dictionary = EmvTagDictionary.standard();
 
         assertEquals("FCI Template", dictionary.find("6f").orElseThrow().name());
+        assertEquals("Dedicated File Name", dictionary.find("84").orElseThrow().name());
         assertEquals("FCI Proprietary Template", dictionary.find("A5").orElseThrow().name());
         assertEquals("FCI Issuer Discretionary Data", dictionary.find("BF0C").orElseThrow().name());
         assertEquals("Application Template", dictionary.find("61").orElseThrow().name());

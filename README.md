@@ -49,13 +49,14 @@ Bağlantı kurulduktan sonra uygulama iki işlem sunar:
 - `1`: Önceden tanımlanmış, salt okunur `SELECT PPSE` komutunu gönderir.
 
 `SELECT PPSE` sonucunda komut, tam ham cevap, cevap verisi, SW1, SW2, durum
-açıklaması ve işlem süresi gösterilir. Bu aşamada cevap verisi henüz BER-TLV
-olarak ayrıştırılmaz.
+açıklaması ve işlem süresi gösterilir. Başarılı cevap verisi daha sonra BER-TLV
+olarak ayrıştırılır.
 
-PPSE cevap yorumlama katmanı, BER-TLV ağacındaki `61` Application Template
-nesnelerinden `4F` AID, isteğe bağlı `50` Application Label ve `87` Application
-Priority Indicator alanlarını doğrulayarak çıkarabilir. Bu katman henüz komut
-satırı akışına bağlanmamıştır.
+Başarılı ve veri içeren PPSE cevapları komut satırında BER-TLV ağacı olarak
+gösterilir. `61` Application Template nesnelerinden `4F` AID, isteğe bağlı `50`
+Application Label ve `87` Application Priority Indicator alanları doğrulanarak
+ayrı bir ödeme uygulamaları özetine çıkarılır. Başarısız durum kodlarında veya
+boş cevap verisinde ayrıştırma yapılmaz ve atlanma nedeni gösterilir.
 
 ## Planlanan katmanlar
 
