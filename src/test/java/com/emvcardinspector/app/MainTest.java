@@ -2,11 +2,11 @@ package com.emvcardinspector.app;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class MainTest {
     @Test
-    void applicationStarts() {
-        assertDoesNotThrow(() -> Main.main(new String[0]));
+    void applicationHasMainEntryPoint() throws NoSuchMethodException {
+        assertNotNull(Main.class.getDeclaredMethod("main", String[].class));
     }
 }

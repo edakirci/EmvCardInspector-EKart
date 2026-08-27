@@ -27,6 +27,10 @@ public final class CardConnection implements ApduTransport, AutoCloseable {
         return card.getATR().getBytes().clone();
     }
 
+    public String protocol() {
+        return card.getProtocol();
+    }
+
     @Override
     public ApduResponse transmit(ApduCommand command) throws CardException {
         ResponseAPDU response = card.getBasicChannel().transmit(command.toCommandApdu());
