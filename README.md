@@ -41,6 +41,17 @@ Uygulama PC/SC okuyucularını listeler, seçilen okuyucuda kartı 15 saniye
 bekler ve bağlantı başarılıysa ATR ile iletişim protokolünü gösterir. Bu
 teşhis adımı karta APDU göndermez.
 
+## Salt okunur SELECT PPSE işlemi
+
+Bağlantı kurulduktan sonra uygulama iki işlem sunar:
+
+- `0`: Yalnızca bağlantı teşhisi; karta APDU gönderilmez.
+- `1`: Önceden tanımlanmış, salt okunur `SELECT PPSE` komutunu gönderir.
+
+`SELECT PPSE` sonucunda komut, tam ham cevap, cevap verisi, SW1, SW2, durum
+açıklaması ve işlem süresi gösterilir. Bu aşamada cevap verisi henüz BER-TLV
+olarak ayrıştırılmaz.
+
 ## Planlanan katmanlar
 
 - `reader`: PC/SC okuyucu keşfi ve kart bağlantısı

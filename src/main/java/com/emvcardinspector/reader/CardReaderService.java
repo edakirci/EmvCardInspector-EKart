@@ -10,5 +10,5 @@ public interface CardReaderService {
 
     boolean waitForCard(String readerName, Duration timeout) throws CardException;
 
-    CardConnection connect(String readerName) throws CardException;
+    CardSession connect(String readerName) throws CardException;
 }

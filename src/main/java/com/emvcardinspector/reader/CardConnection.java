@@ -2,7 +2,6 @@ package com.emvcardinspector.reader;
 
 import com.emvcardinspector.apdu.ApduCommand;
 import com.emvcardinspector.apdu.ApduResponse;
-import com.emvcardinspector.apdu.ApduTransport;
 
 import javax.smartcardio.Card;
 import javax.smartcardio.CardException;
@@ -10,7 +9,7 @@ import javax.smartcardio.ResponseAPDU;
 import java.util.Objects;
 
 /** Owns a live smart-card connection and its basic APDU channel. */
-public final class CardConnection implements ApduTransport, AutoCloseable {
+public final class CardConnection implements CardSession {
     private final String readerName;
     private final Card card;
 

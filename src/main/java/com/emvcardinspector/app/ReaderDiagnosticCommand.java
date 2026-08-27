@@ -1,7 +1,11 @@
 package com.emvcardinspector.app;
 
-import com.emvcardinspector.reader.CardConnection;
+import com.emvcardinspector.apdu.ApduCommand;
+import com.emvcardinspector.apdu.ApduResponse;
+import com.emvcardinspector.apdu.StatusWord;
+import com.emvcardinspector.emv.EmvCommands;
 import com.emvcardinspector.reader.CardReaderService;
+import com.emvcardinspector.reader.CardSession;
 import com.emvcardinspector.util.HexUtils;
 
 import javax.smartcardio.CardException;
@@ -11,7 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 
-/** Interactive command-line diagnostic for PC/SC reader and card activation. */
+/** Interactive PC/SC diagnostic and approved read-only card operations. */
 public final class ReaderDiagnosticCommand {
     private final CardReaderService readerService;
     private final Scanner input;
@@ -65,11 +69,34 @@ public final class ReaderDiagnosticCommand {
                 return 2;
             }
 
-            try (CardConnection connection = readerService.connect(readerName)) {
+            try (CardSession connection = readerService.connect(readerName)) {
                 output.printf("Reader     : %s%n", connection.readerName());
                 output.printf("ATR        : %s%n", HexUtils.toHex(connection.atr()));
                 output.printf("Protocol   : %s%n", connection.protocol());
                 output.println("Connection : SUCCESS");
+                output.println();
+                output.println("Available operations:");
+                output.println("[0] Connection diagnostic only");
+                output.println("[1] SELECT PPSE - Discover payment applications");
+                output.print("Select operation: ");
+
+                if (!input.hasNextLine()) {
+                    output.println();
+                    output.println("Operation selection was not provided.");
+                    return 1;
+                }
+
+                Integer operation = parseSelection(input.nextLine(), 2);
+                if (operation == null) {
+                    output.println("Invalid operation selection.");
+                    return 1;
+                }
+                if (operation == 0) {
+                    output.println("No APDU command was sent.");
+                    return 0;
+                }
+
+                executeSelectPpse(connection);
                 return 0;
             }
         } catch (CardException error) {
@@ -80,6 +107,25 @@ public final class ReaderDiagnosticCommand {
             }
             return 3;
         }
+    }
+
+    private void executeSelectPpse(CardSession connection) throws CardException {
+        ApduCommand command = EmvCommands.selectPpse();
+        long startedAt = System.nanoTime();
+        ApduResponse response = connection.transmit(command);
+        long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        output.println();
+        output.println("Command       : SELECT PPSE");
+        output.printf("APDU          : %s%n", HexUtils.toHex(command.bytes()));
+        output.printf("Raw Response  : %s%n", HexUtils.toHex(response.bytes()));
+        output.printf("Response Data : %s%n",
+                response.data().length == 0 ? "<empty>" : HexUtils.toHex(response.data()));
+        output.printf("SW1           : %02X%n", response.sw1());
+        output.printf("SW2           : %02X%n", response.sw2());
+        output.printf("Status Word   : %04X%n", response.statusWord());
+        output.printf("Status        : %s%n", StatusWord.describe(response.statusWord()));
+        output.printf("Duration      : %d ms%n", durationMillis);
     }
 
     private static Integer parseSelection(String text, int readerCount) {
