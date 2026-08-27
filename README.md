@@ -56,6 +56,6 @@ olarak ayrıştırılmaz.
 
 - `reader`: PC/SC okuyucu keşfi ve kart bağlantısı
 - `apdu`: APDU komut/cevap modelleri ve durum kodları
-- `tlv`: BER-TLV ayrıştırma
+- `tlv`: BER-TLV ayrıştırma; çok baytlı tag, definite length ve iç içe yapılar
 - `emv`: EMV tag sözlüğü ve doğrulama
 - `report`: Maskelenmiş JSON ve HTML raporları
