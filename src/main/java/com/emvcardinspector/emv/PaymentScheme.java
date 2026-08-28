@@ -12,6 +12,7 @@ public enum PaymentScheme {
     JCB("A000000065", "JCB"),
     DISCOVER("A000000152", "Discover"),
     UNIONPAY("A000000333", "UnionPay"),
+    TROY("A000000672", "TROY"),
     UNKNOWN("", "Unknown");
 
     private final String rid;

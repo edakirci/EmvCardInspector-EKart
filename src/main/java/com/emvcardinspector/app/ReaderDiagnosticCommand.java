@@ -313,9 +313,9 @@ public final class ReaderDiagnosticCommand {
                 output.printf("  Application     : %s%n", applicationName);
                 output.printf("  Preferred Name  : %s%n", selected.preferredName().orElse("<not provided>"));
                 output.printf("  PDOL            : %s%n", selected.pdolHex().orElse("<not provided>"));
-                printTlvTree(selected.tlvNodes());
+                printTlvTree(selected.tlvNodes(), application.aid());
                 if (paymentInterface == PaymentInterface.CONTACT) {
-                    executeGetProcessingOptions(connection);
+                    executeGetProcessingOptions(connection, application.aid());
                     return;
                 }
             } catch (TlvParseException | EmvDataException error) {
@@ -325,7 +325,7 @@ public final class ReaderDiagnosticCommand {
         }
     }
 
-    private void executeGetProcessingOptions(CardSession connection) throws CardException {
+    private void executeGetProcessingOptions(CardSession connection, byte[] applicationAid) throws CardException {
         ApduCommand command = EmvCommands.getProcessingOptions();
         long startedAt = System.nanoTime();
         ApduResponse response = connection.transmit(command);
@@ -355,8 +355,8 @@ public final class ReaderDiagnosticCommand {
             output.println("  GPO Parsing     : SUCCESS");
             output.printf("  AIP (82)        : %s%n", HexUtils.toHex(gpo.aip()));
             output.printf("  AFL (94)        : %s%n", HexUtils.toHex(gpo.afl()));
-            printTlvTree(gpo.tlvNodes());
-            readRecordsListedInAfl(connection, gpo.aflEntries());
+            printTlvTree(gpo.tlvNodes(), applicationAid);
+            readRecordsListedInAfl(connection, gpo.aflEntries(), applicationAid);
         } catch (TlvParseException | EmvDataException error) {
             output.println("  GPO Parsing     : FAILED");
             output.println("  Parse Error     : " + error.getMessage());
@@ -365,7 +365,8 @@ public final class ReaderDiagnosticCommand {
 
     private void readRecordsListedInAfl(
             CardSession connection,
-            List<ApplicationFileLocatorEntry> aflEntries) throws CardException {
+            List<ApplicationFileLocatorEntry> aflEntries,
+            byte[] applicationAid) throws CardException {
         for (ApplicationFileLocatorEntry entry : aflEntries) {
             output.printf("  AFL Entry       : SFI %d, records %d-%d, ODA records %d%n",
                     entry.sfi(),
@@ -378,7 +379,7 @@ public final class ReaderDiagnosticCommand {
             for (int recordNumber = entry.firstRecord();
                  recordNumber <= entry.lastRecord();
                  recordNumber++) {
-                readApplicationRecord(connection, recordNumber, entry.sfi());
+                readApplicationRecord(connection, recordNumber, entry.sfi(), applicationAid);
             }
         }
     }
@@ -386,7 +387,8 @@ public final class ReaderDiagnosticCommand {
     private void readApplicationRecord(
             CardSession connection,
             int recordNumber,
-            int sfi) throws CardException {
+            int sfi,
+            byte[] applicationAid) throws CardException {
         ApduCommand command = EmvCommands.readRecord(recordNumber, sfi);
         long startedAt = System.nanoTime();
         ApduResponse response = connection.transmit(command);
@@ -414,7 +416,7 @@ public final class ReaderDiagnosticCommand {
         try {
             List<TlvNode> nodes = applicationRecordParser.parse(response.data());
             output.println("  Record Parsing  : SUCCESS");
-            printTlvTree(nodes);
+            printTlvTree(nodes, applicationAid);
         } catch (TlvParseException error) {
             output.println("  Record Parsing  : FAILED");
             output.println("  Parse Error     : " + error.getMessage());
@@ -422,16 +424,23 @@ public final class ReaderDiagnosticCommand {
     }
 
     private void printTlvTree(List<TlvNode> nodes) {
+        printTlvTree(nodes, null);
+    }
+
+    private void printTlvTree(List<TlvNode> nodes, byte[] applicationAid) {
         output.println();
         output.println("TLV Tree:");
         for (TlvNode node : nodes) {
-            printTlvNode(node, 0);
+            printTlvNode(node, 0, applicationAid);
         }
     }
 
-    private void printTlvNode(TlvNode node, int depth) {
+    private void printTlvNode(TlvNode node, int depth, byte[] applicationAid) {
         String indent = "  ".repeat(depth);
-        String name = tagDictionary.find(node.tag().hex())
+        var tagDefinition = applicationAid == null
+                ? tagDictionary.find(node.tag().hex())
+                : tagDictionary.find(applicationAid, node.tag().hex());
+        String name = tagDefinition
                 .map(tag -> tag.name())
                 .orElse("Unknown EMV tag");
         String type = node.tag().constructed() ? "constructed" : "primitive";
@@ -446,7 +455,7 @@ public final class ReaderDiagnosticCommand {
             output.printf("%s  Value: %s%n", indent, HexUtils.toHex(node.value()));
         }
         for (TlvNode child : node.children()) {
-            printTlvNode(child, depth + 1);
+            printTlvNode(child, depth + 1, applicationAid);
         }
     }
 

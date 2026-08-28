@@ -93,6 +93,15 @@ Temaslı PSE cevabındaki `88` Short File Identifier alanı ayrıştırılır. U
 bu SFI üzerindeki yalnızca ilk kaydı `READ RECORD 1` ile okur. İlk kayıttaki
 ödeme uygulamaları PPSE ile aynı özet biçiminde gösterilir.
 
+EMV tag sözlüğü iki seviyelidir. Standart EMV tag'leri ortak sözlükte tutulur;
+Visa (`A000000003`), Mastercard (`A000000004`), American Express
+(`A000000025`), China UnionPay/CUP (`A000000333`) ve TROY (`A000000672`) için
+uygulamaya özel tag alanları ayrı tutulur. SELECT AID sonrasında FCI, GPO ve
+READ RECORD çıktıları seçilen AID bağlamıyla çözümlenir. Bir tag için en uzun
+eşleşen AID öneki önceliklidir; uygulamaya özel tanım bulunamazsa ortak EMV
+tanımına geri dönülür. Böylece gerektiğinde hem bir ödeme şemasının tamamına
+hem de tek bir ürün AID'sine özel tag tanımı eklenebilir.
+
 ## Planlanan katmanlar
 
 - `reader`: PC/SC okuyucu keşfi ve kart bağlantısı

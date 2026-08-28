@@ -10,6 +10,9 @@ class PaymentSchemeTest {
     void identifiesPaymentSchemeFromAidRid() {
         assertEquals(PaymentScheme.VISA, PaymentScheme.fromAid(HexUtils.fromHex("A0000000031010")));
         assertEquals(PaymentScheme.MASTERCARD, PaymentScheme.fromAid(HexUtils.fromHex("A0000000041010")));
+        assertEquals(PaymentScheme.AMERICAN_EXPRESS, PaymentScheme.fromAid(HexUtils.fromHex("A00000002501")));
+        assertEquals(PaymentScheme.UNIONPAY, PaymentScheme.fromAid(HexUtils.fromHex("A000000333010101")));
+        assertEquals(PaymentScheme.TROY, PaymentScheme.fromAid(HexUtils.fromHex("A0000006723020")));
     }
 
     @Test
