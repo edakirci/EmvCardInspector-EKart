@@ -99,6 +99,7 @@ class ReaderDiagnosticCommandTest {
         assertTrue(result.output().contains("Scheme          : Visa"));
         assertTrue(result.output().contains("Application     : Debit Mastercard"));
         assertTrue(result.output().contains("PDOL            : 9F1A02"));
+        assertFalse(result.output().contains("GET PROCESSING OPTIONS"));
     }
 
     @Test
@@ -109,12 +110,18 @@ class ReaderDiagnosticCommandTest {
                 new ApduResponse(new byte[0], 0x6D00),
                 successfulPseResponse(),
                 successfulPseRecordVisa(),
-                selectedVisaResponse());
+                selectedVisaResponse(),
+                successfulGpoResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse());
 
         CommandResult result = runCommand(readerService, "1\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertEquals(4, readerService.session.transmittedCommands.size());
+        assertEquals(10, readerService.session.transmittedCommands.size());
         assertEquals("00A404000E315041592E5359532E444446303100",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
         assertEquals("00A404000E315041592E5359532E444446303100",
@@ -123,6 +130,18 @@ class ReaderDiagnosticCommandTest {
                 HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
         assertEquals("00A4040007A000000003101000",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(3).bytes()));
+        assertEquals("80A8000002830000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(4).bytes()));
+        assertEquals("00B2021400",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(5).bytes()));
+        assertEquals("00B2011C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(6).bytes()));
+        assertEquals("00B2021C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(7).bytes()));
+        assertEquals("00B2012C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(8).bytes()));
+        assertEquals("00B2022C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(9).bytes()));
         assertTrue(result.output().contains("Card readiness: first SELECT returned 6D00"));
         assertTrue(result.output().contains("TLV Parsing   : SUCCESS"));
         assertTrue(result.output().contains("Payment Applications: 1"));
@@ -180,31 +199,96 @@ class ReaderDiagnosticCommandTest {
                 true,
                 successfulPseResponse(),
                 successfulPseRecordVisa(),
-                selectedVisaResponse());
+                selectedVisaResponse(),
+                successfulGpoResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse());
 
         CommandResult result = runCommand(readerService, "1\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertEquals(3, readerService.session.transmittedCommands.size());
+        assertEquals(9, readerService.session.transmittedCommands.size());
         assertEquals("00A404000E315041592E5359532E444446303100",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
         assertEquals("00B2010C00",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
         assertEquals("00A4040007A000000003101000",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
+        assertEquals("80A8000002830000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(3).bytes()));
+        assertEquals("00B2021400",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(4).bytes()));
+        assertEquals("00B2011C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(5).bytes()));
+        assertEquals("00B2021C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(6).bytes()));
+        assertEquals("00B2012C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(7).bytes()));
+        assertEquals("00B2022C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(8).bytes()));
         assertTrue(readerService.session.closed);
         assertTrue(result.output().contains("Interface  : Contact"));
         assertTrue(result.output().contains("Command       : SELECT PSE"));
         assertTrue(result.output().contains("- 88 | Short File Identifier | primitive"));
         assertTrue(result.output().contains("PSE Directory SFI: 1"));
         assertTrue(result.output().contains("Command       : READ RECORD 1 (SFI 1)"));
-        assertFalse(result.output().contains("READ RECORD 2"));
+        assertFalse(readerService.session.transmittedCommands.stream()
+                .map(ApduCommand::bytes)
+                .map(HexUtils::toHex)
+                .anyMatch("00B2020C00"::equals));
         assertTrue(result.output().contains("Payment Applications: 1"));
         assertTrue(result.output().contains("AID                : A0000000031010"));
         assertTrue(result.output().contains("Application Branch [0]"));
         assertTrue(result.output().contains("Application     : Visa Debit"));
+        assertTrue(result.output().contains("Command         : READ RECORD 2 (SFI 2)"));
+        assertTrue(result.output().contains("APDU            : 00B2021400"));
+        assertTrue(result.output().contains("APDU            : 00B2011C00"));
+        assertTrue(result.output().contains("APDU            : 00B2021C00"));
+        assertTrue(result.output().contains("APDU            : 00B2012C00"));
+        assertTrue(result.output().contains("APDU            : 00B2022C00"));
+        assertTrue(result.output().contains("Record Parsing  : SUCCESS"));
         assertTrue(result.output().contains("Connection closed. Returning to main menu."));
         assertEquals(2, countOccurrences(result.output(), "Main menu:"));
+    }
+
+    @Test
+    void stopsContactFlowAfterFirstApplicationCompletesItsAflRecords() {
+        FakeReaderService readerService = new FakeReaderService(
+                List.of("Contact", "Contactless"),
+                true,
+                successfulPseResponse(),
+                successfulPseRecordWithTwoApplications(),
+                selectedVisaResponse(),
+                successfulGpoResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse(),
+                successfulApplicationRecordResponse());
+
+        CommandResult result = runCommand(readerService, "1\n0\n");
+
+        assertEquals(0, result.exitCode());
+        assertEquals(9, readerService.session.transmittedCommands.size());
+        assertEquals("80A8000002830000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(3).bytes()));
+        assertEquals("00B2021400",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(4).bytes()));
+        assertEquals("00B2011C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(5).bytes()));
+        assertEquals("00B2021C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(6).bytes()));
+        assertEquals("00B2012C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(7).bytes()));
+        assertEquals("00B2022C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(8).bytes()));
+        assertFalse(readerService.session.transmittedCommands.stream()
+                .map(ApduCommand::bytes)
+                .map(HexUtils::toHex)
+                .anyMatch("00A4040007A000000004101000"::equals));
     }
 
     @Test
@@ -257,6 +341,14 @@ class ReaderDiagnosticCommandTest {
                 "701461124F07A0000000031010500456495341870181"), 0x9000);
     }
 
+    private static ApduResponse successfulPseRecordWithTwoApplications() {
+        return new ApduResponse(HexUtils.fromHex(
+                "702A"
+                        + "61124F07A0000000031010500456495341870181"
+                        + "61144F07A000000004101050064D4153544552870102"),
+                0x9000);
+    }
+
     private static ApduResponse selectedVisaResponse() {
         return new ApduResponse(HexUtils.fromHex(
                 "6F1D8407A0000000031010A512"
@@ -270,6 +362,18 @@ class ReaderDiagnosticCommandTest {
                         + "50104465626974204D617374657263617264"
                         + "9F12104465626974204D617374657263617264"
                         + "9F38039F1A02"), 0x9000);
+    }
+
+    private static ApduResponse successfulGpoResponse() {
+        return new ApduResponse(HexUtils.fromHex(
+                "771282023800940C"
+                        + "10020201"
+                        + "18010200"
+                        + "28010200"), 0x9000);
+    }
+
+    private static ApduResponse successfulApplicationRecordResponse() {
+        return new ApduResponse(HexUtils.fromHex("700482023800"), 0x9000);
     }
 
     private static final class FakeReaderService implements CardReaderService {

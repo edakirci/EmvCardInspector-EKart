@@ -9,6 +9,9 @@ import com.emvcardinspector.emv.EmvDataException;
 import com.emvcardinspector.emv.EmvTagDictionary;
 import com.emvcardinspector.emv.ApplicationSelectionResponse;
 import com.emvcardinspector.emv.ApplicationSelectionResponseParser;
+import com.emvcardinspector.emv.ApplicationFileLocatorEntry;
+import com.emvcardinspector.emv.GetProcessingOptionsResponse;
+import com.emvcardinspector.emv.GetProcessingOptionsResponseParser;
 import com.emvcardinspector.emv.PaymentScheme;
 import com.emvcardinspector.emv.PpseResponse;
 import com.emvcardinspector.emv.PpseResponseParser;
@@ -16,6 +19,7 @@ import com.emvcardinspector.emv.PseResponse;
 import com.emvcardinspector.emv.PseResponseParser;
 import com.emvcardinspector.reader.CardReaderService;
 import com.emvcardinspector.reader.CardSession;
+import com.emvcardinspector.tlv.BerTlvParser;
 import com.emvcardinspector.tlv.TlvNode;
 import com.emvcardinspector.tlv.TlvParseException;
 import com.emvcardinspector.util.HexUtils;
@@ -41,6 +45,8 @@ public final class ReaderDiagnosticCommand {
     private final PpseResponseParser ppseResponseParser;
     private final PseResponseParser pseResponseParser;
     private final ApplicationSelectionResponseParser applicationSelectionResponseParser;
+    private final GetProcessingOptionsResponseParser getProcessingOptionsResponseParser;
+    private final BerTlvParser applicationRecordParser;
     private final EmvTagDictionary tagDictionary;
 
     public ReaderDiagnosticCommand(
@@ -55,6 +61,8 @@ public final class ReaderDiagnosticCommand {
         this.ppseResponseParser = new PpseResponseParser();
         this.pseResponseParser = new PseResponseParser();
         this.applicationSelectionResponseParser = new ApplicationSelectionResponseParser();
+        this.getProcessingOptionsResponseParser = new GetProcessingOptionsResponseParser();
+        this.applicationRecordParser = new BerTlvParser();
         this.tagDictionary = EmvTagDictionary.standard();
     }
 
@@ -196,7 +204,7 @@ public final class ReaderDiagnosticCommand {
                 output.println("TLV Parsing   : SUCCESS");
                 printTlvTree(ppseResponse.tlvNodes());
                 printApplications(ppseResponse.applications());
-                selectApplications(connection, ppseResponse.applications());
+                selectApplications(connection, ppseResponse.applications(), paymentInterface);
             }
         } catch (TlvParseException | EmvDataException error) {
             output.println("TLV Parsing   : FAILED");
@@ -257,12 +265,13 @@ public final class ReaderDiagnosticCommand {
             output.println("Parse Error   : " + error.getMessage());
         }
         printApplications(applications);
-        selectApplications(connection, applications);
+        selectApplications(connection, applications, PaymentInterface.CONTACT);
     }
 
     private void selectApplications(
             CardSession connection,
-            List<EmvApplication> applications) throws CardException {
+            List<EmvApplication> applications,
+            PaymentInterface paymentInterface) throws CardException {
         for (int index = 0; index < applications.size(); index++) {
             EmvApplication application = applications.get(index);
             PaymentScheme scheme = PaymentScheme.fromAid(application.aid());
@@ -305,10 +314,110 @@ public final class ReaderDiagnosticCommand {
                 output.printf("  Preferred Name  : %s%n", selected.preferredName().orElse("<not provided>"));
                 output.printf("  PDOL            : %s%n", selected.pdolHex().orElse("<not provided>"));
                 printTlvTree(selected.tlvNodes());
+                if (paymentInterface == PaymentInterface.CONTACT) {
+                    executeGetProcessingOptions(connection);
+                    return;
+                }
             } catch (TlvParseException | EmvDataException error) {
                 output.println("  FCI Parsing     : FAILED");
                 output.println("  Parse Error     : " + error.getMessage());
             }
+        }
+    }
+
+    private void executeGetProcessingOptions(CardSession connection) throws CardException {
+        ApduCommand command = EmvCommands.getProcessingOptions();
+        long startedAt = System.nanoTime();
+        ApduResponse response = connection.transmit(command);
+        long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        output.println();
+        output.println("  Command         : GET PROCESSING OPTIONS");
+        output.printf("  APDU            : %s%n", HexUtils.toHex(command.bytes()));
+        output.printf("  Raw Response    : %s%n", HexUtils.toHex(response.bytes()));
+        output.printf("  Status Word     : %04X%n", response.statusWord());
+        output.printf("  Status          : %s%n", StatusWord.describe(response.statusWord()));
+        output.printf("  Duration        : %d ms%n", durationMillis);
+
+        if (!response.isSuccess()) {
+            output.println("  GPO Parsing     : SKIPPED");
+            output.printf("  Reason          : status word %04X is not successful%n", response.statusWord());
+            return;
+        }
+        if (response.data().length == 0) {
+            output.println("  GPO Parsing     : SKIPPED");
+            output.println("  Reason          : response data is empty");
+            return;
+        }
+
+        try {
+            GetProcessingOptionsResponse gpo = getProcessingOptionsResponseParser.parse(response.data());
+            output.println("  GPO Parsing     : SUCCESS");
+            output.printf("  AIP (82)        : %s%n", HexUtils.toHex(gpo.aip()));
+            output.printf("  AFL (94)        : %s%n", HexUtils.toHex(gpo.afl()));
+            printTlvTree(gpo.tlvNodes());
+            readRecordsListedInAfl(connection, gpo.aflEntries());
+        } catch (TlvParseException | EmvDataException error) {
+            output.println("  GPO Parsing     : FAILED");
+            output.println("  Parse Error     : " + error.getMessage());
+        }
+    }
+
+    private void readRecordsListedInAfl(
+            CardSession connection,
+            List<ApplicationFileLocatorEntry> aflEntries) throws CardException {
+        for (ApplicationFileLocatorEntry entry : aflEntries) {
+            output.printf("  AFL Entry       : SFI %d, records %d-%d, ODA records %d%n",
+                    entry.sfi(),
+                    entry.firstRecord(),
+                    entry.lastRecord(),
+                    entry.offlineAuthenticationRecordCount());
+
+            // The fourth AFL byte only marks how many records participate in
+            // offline data authentication; it does not remove them from READ RECORD.
+            for (int recordNumber = entry.firstRecord();
+                 recordNumber <= entry.lastRecord();
+                 recordNumber++) {
+                readApplicationRecord(connection, recordNumber, entry.sfi());
+            }
+        }
+    }
+
+    private void readApplicationRecord(
+            CardSession connection,
+            int recordNumber,
+            int sfi) throws CardException {
+        ApduCommand command = EmvCommands.readRecord(recordNumber, sfi);
+        long startedAt = System.nanoTime();
+        ApduResponse response = connection.transmit(command);
+        long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        output.println();
+        output.printf("  Command         : READ RECORD %d (SFI %d)%n", recordNumber, sfi);
+        output.printf("  APDU            : %s%n", HexUtils.toHex(command.bytes()));
+        output.printf("  Raw Response    : %s%n", HexUtils.toHex(response.bytes()));
+        output.printf("  Status Word     : %04X%n", response.statusWord());
+        output.printf("  Status          : %s%n", StatusWord.describe(response.statusWord()));
+        output.printf("  Duration        : %d ms%n", durationMillis);
+
+        if (!response.isSuccess()) {
+            output.println("  Record Parsing  : SKIPPED");
+            output.printf("  Reason          : status word %04X is not successful%n", response.statusWord());
+            return;
+        }
+        if (response.data().length == 0) {
+            output.println("  Record Parsing  : SKIPPED");
+            output.println("  Reason          : response data is empty");
+            return;
+        }
+
+        try {
+            List<TlvNode> nodes = applicationRecordParser.parse(response.data());
+            output.println("  Record Parsing  : SUCCESS");
+            printTlvTree(nodes);
+        } catch (TlvParseException error) {
+            output.println("  Record Parsing  : FAILED");
+            output.println("  Parse Error     : " + error.getMessage());
         }
     }
 

@@ -71,6 +71,24 @@ Mastercard ve diğer desteklenen ödeme ağları belirlenir. Kartın verdiği `5
 Application Label, `9F12` Application Preferred Name ve `9F38` PDOL alanları
 uygulama bazlı bir dal altında gösterilir.
 
+Temaslı kartta başarılı uygulama seçiminden sonra `80 A8 00 00 02 83 00 00`
+GET PROCESSING OPTIONS komutu gönderilir. Format-2 cevaplarda `77` Response
+Message Template, `82` Application Interchange Profile (AIP) ve `94`
+Application File Locator (AFL) alanları doğrulanır ve TLV ağacıyla birlikte
+gösterilir. Bu GPO adımı henüz temassız akışta çalıştırılmaz.
+
+AFL içindeki her dört byte'lık girdi SFI, ilk kayıt, son kayıt ve offline
+authentication kayıt sayısı olarak ayrıştırılır. Temaslı akışta her AFL girdisi
+sırayla dolaşılır ve ilan edilen ilk-son kayıt aralığının tamamı ilgili SFI ile
+okunur. Dördüncü byte kayıt atlama bilgisi değildir; yalnızca aralıktaki kaç
+kaydın offline data authentication işlemine dahil olduğunu belirtir. Örneğin
+`10 02 02 01`, SFI 2 / kayıt 2'nin okunacağını ve bu tek kaydın offline
+authentication verisine dahil olduğunu ifade eder. Bu kayıt için
+`00 B2 02 14 00`; SFI 3 / kayıt 1-2 için
+`00 B2 01 1C 00` ve `00 B2 02 1C 00`; SFI 5 / kayıt 1-2 için
+`00 B2 01 2C 00` ve `00 B2 02 2C 00` gönderilir. Başarılı kayıt cevapları
+BER-TLV olarak ayrıştırılıp gösterilir.
+
 Temaslı PSE cevabındaki `88` Short File Identifier alanı ayrıştırılır. Uygulama,
 bu SFI üzerindeki yalnızca ilk kaydı `READ RECORD 1` ile okur. İlk kayıttaki
 ödeme uygulamaları PPSE ile aynı özet biçiminde gösterilir.

@@ -53,6 +53,13 @@ class EmvCommandsTest {
     }
 
     @Test
+    void buildsGetProcessingOptionsCommandWithoutPdolData() {
+        assertEquals(
+                "80A8000002830000",
+                HexUtils.toHex(EmvCommands.getProcessingOptions().bytes()));
+    }
+
+    @Test
     void buildsReadRecordCommandFromRecordNumberAndSfi() {
         assertEquals(
                 "00B2010C00",
@@ -60,5 +67,20 @@ class EmvCommandsTest {
         assertEquals(
                 "00B2031C00",
                 HexUtils.toHex(EmvCommands.readRecord(3, 3).bytes()));
+        assertEquals(
+                "00B2021400",
+                HexUtils.toHex(EmvCommands.readRecord(2, 2).bytes()));
+        assertEquals(
+                "00B2011C00",
+                HexUtils.toHex(EmvCommands.readRecord(1, 3).bytes()));
+        assertEquals(
+                "00B2021C00",
+                HexUtils.toHex(EmvCommands.readRecord(2, 3).bytes()));
+        assertEquals(
+                "00B2012C00",
+                HexUtils.toHex(EmvCommands.readRecord(1, 5).bytes()));
+        assertEquals(
+                "00B2022C00",
+                HexUtils.toHex(EmvCommands.readRecord(2, 5).bytes()));
     }
 }

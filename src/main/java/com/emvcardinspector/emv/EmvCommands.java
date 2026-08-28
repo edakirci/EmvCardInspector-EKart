@@ -43,6 +43,11 @@ public final class EmvCommands {
         return new ApduCommand(command);
     }
 
+    /** Requests processing options when the selected application has no PDOL input. */
+    public static ApduCommand getProcessingOptions() {
+        return new ApduCommand(HexUtils.fromHex("80A8000002830000"));
+    }
+
     /** Reads one record from an EMV short file. */
     public static ApduCommand readRecord(int recordNumber, int sfi) {
         if (recordNumber < 1 || recordNumber > 255) {
