@@ -12,6 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class EmvCommandsTest {
     @Test
+    void buildsSelectPseCommandForContactCards() {
+        assertEquals(
+                "00A404000E315041592E5359532E444446303100",
+                HexUtils.toHex(EmvCommands.selectPse().bytes()));
+    }
+
+    @Test
     void createsSelectPpseCommand() {
         ApduCommand command = EmvCommands.selectPpse();
         CommandAPDU commandApdu = command.toCommandApdu();

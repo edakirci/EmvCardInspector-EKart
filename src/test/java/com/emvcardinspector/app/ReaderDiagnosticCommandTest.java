@@ -23,19 +23,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ReaderDiagnosticCommandTest {
     @Test
     void reportsWhenNoReaderIsAvailable() {
-        CommandResult result = runCommand(new FakeReaderService(List.of(), false), "");
+        CommandResult result = runCommand(new FakeReaderService(List.of(), false), "1\n0\n");
 
-        assertEquals(1, result.exitCode());
+        assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("No PC/SC reader found"));
+        assertTrue(result.output().contains("Main menu:"));
     }
 
     @Test
     void rejectsReaderSelectionOutsideAvailableRange() {
         CommandResult result = runCommand(
                 new FakeReaderService(List.of("Contact", "Contactless"), false),
-                "7\n");
+                "1\n7\n0\n");
 
-        assertEquals(1, result.exitCode());
+        assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("Invalid reader selection"));
     }
 
@@ -45,9 +46,9 @@ class ReaderDiagnosticCommandTest {
                 List.of("Contact", "Contactless"),
                 false);
 
-        CommandResult result = runCommand(readerService, "1\n");
+        CommandResult result = runCommand(readerService, "2\n1\n0\n");
 
-        assertEquals(2, result.exitCode());
+        assertEquals(0, result.exitCode());
         assertEquals("Contactless", readerService.waitedReaderName);
         assertTrue(result.output().contains("No card detected within 15 seconds"));
     }
@@ -59,13 +60,14 @@ class ReaderDiagnosticCommandTest {
                 true,
                 successfulPpseResponse());
 
-        CommandResult result = runCommand(readerService, "1\n1\n");
+        CommandResult result = runCommand(readerService, "2\n1\n0\n");
 
         assertEquals(0, result.exitCode());
         assertNotNull(readerService.session.transmittedCommand);
         assertEquals("00A404000E325041592E5359532E444446303100",
                 HexUtils.toHex(readerService.session.transmittedCommand.bytes()));
         assertTrue(readerService.session.closed);
+        assertTrue(result.output().contains("Interface  : Contactless"));
         assertTrue(result.output().contains("Command       : SELECT PPSE"));
         assertTrue(result.output().contains("Raw Response  : 6F"));
         assertTrue(result.output().contains("Response Data : 6F"));
@@ -91,7 +93,7 @@ class ReaderDiagnosticCommandTest {
                 true,
                 new ApduResponse(new byte[0], 0x6700));
 
-        CommandResult result = runCommand(readerService, "0\n1\n");
+        CommandResult result = runCommand(readerService, "2\n0\n0\n");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("TLV Parsing   : SKIPPED"));
@@ -107,7 +109,7 @@ class ReaderDiagnosticCommandTest {
                 true,
                 new ApduResponse(new byte[0], 0x9000));
 
-        CommandResult result = runCommand(readerService, "0\n1\n");
+        CommandResult result = runCommand(readerService, "2\n0\n0\n");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("TLV Parsing   : SKIPPED"));
@@ -122,23 +124,40 @@ class ReaderDiagnosticCommandTest {
                 true,
                 new ApduResponse(HexUtils.fromHex("6F035A0201"), 0x9000));
 
-        CommandResult result = runCommand(readerService, "0\n1\n");
+        CommandResult result = runCommand(readerService, "2\n0\n0\n");
 
-        assertEquals(4, result.exitCode());
+        assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("TLV Parsing   : FAILED"));
         assertTrue(result.output().contains("Parse Error"));
     }
 
     @Test
-    void diagnosticOnlyOperationDoesNotSendAnApdu() {
-        FakeReaderService readerService = new FakeReaderService(List.of("Contactless"), true);
+    void sendsSelectPseForContactAndReturnsToMainMenu() {
+        FakeReaderService readerService = new FakeReaderService(
+                List.of("Contact", "Contactless"),
+                true,
+                successfulPpseResponse());
 
-        CommandResult result = runCommand(readerService, "0\n0\n");
+        CommandResult result = runCommand(readerService, "1\n0\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertEquals(null, readerService.session.transmittedCommand);
+        assertNotNull(readerService.session.transmittedCommand);
+        assertEquals("00A404000E315041592E5359532E444446303100",
+                HexUtils.toHex(readerService.session.transmittedCommand.bytes()));
         assertTrue(readerService.session.closed);
-        assertTrue(result.output().contains("No APDU command was sent"));
+        assertTrue(result.output().contains("Interface  : Contact"));
+        assertTrue(result.output().contains("Command       : SELECT PSE"));
+        assertTrue(result.output().contains("Connection closed. Returning to main menu."));
+        assertEquals(2, countOccurrences(result.output(), "Main menu:"));
+    }
+
+    @Test
+    void invalidInterfaceSelectionRedisplaysMainMenu() {
+        CommandResult result = runCommand(new FakeReaderService(List.of("Contact"), true), "9\n0\n");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.output().contains("Invalid interface selection."));
+        assertEquals(2, countOccurrences(result.output(), "Main menu:"));
     }
 
     private static CommandResult runCommand(FakeReaderService readerService, String inputText) {
@@ -156,6 +175,10 @@ class ReaderDiagnosticCommandTest {
     }
 
     private record CommandResult(int exitCode, String output) {
+    }
+
+    private static int countOccurrences(String text, String value) {
+        return text.split(java.util.regex.Pattern.quote(value), -1).length - 1;
     }
 
     private static ApduResponse successfulPpseResponse() {

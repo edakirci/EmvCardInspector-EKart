@@ -46,87 +46,107 @@ public final class ReaderDiagnosticCommand {
 
     public int run() {
         output.println("EMV Card Inspector");
-        output.println();
+        while (true) {
+            PaymentInterface paymentInterface = selectPaymentInterface();
+            if (paymentInterface == null) {
+                output.println("Goodbye.");
+                return 0;
+            }
+            runSingleSession(paymentInterface);
+        }
+    }
 
+    private PaymentInterface selectPaymentInterface() {
+        while (true) {
+            output.println();
+            output.println("Main menu:");
+            output.println("[1] Contact (SELECT PSE)");
+            output.println("[2] Contactless (SELECT PPSE)");
+            output.println("[0] Exit");
+            output.print("Select interface: ");
+            if (!input.hasNextLine()) {
+                output.println();
+                return null;
+            }
+
+            switch (input.nextLine().trim()) {
+                case "0":
+                    return null;
+                case "1":
+                    return PaymentInterface.CONTACT;
+                case "2":
+                    return PaymentInterface.CONTACTLESS;
+                default:
+                    output.println("Invalid interface selection.");
+            }
+        }
+    }
+
+    private void runSingleSession(PaymentInterface paymentInterface) {
         try {
             List<String> readers = readerService.listReaderNames();
             if (readers.isEmpty()) {
                 output.println("No PC/SC reader found.");
-                return 1;
+                return;
             }
 
+            output.println();
             output.println("Available PC/SC readers:");
             for (int index = 0; index < readers.size(); index++) {
                 output.printf("[%d] %s%n", index, readers.get(index));
             }
-
-            output.print("Select reader: ");
+            output.print("Select reader (or B to go back): ");
             if (!input.hasNextLine()) {
-                output.println();
-                output.println("Reader selection was not provided.");
-                return 1;
+                return;
             }
 
-            Integer selection = parseSelection(input.nextLine(), readers.size());
+            String readerSelection = input.nextLine().trim();
+            if (readerSelection.equalsIgnoreCase("B")) {
+                return;
+            }
+            Integer selection = parseSelection(readerSelection, readers.size());
             if (selection == null) {
                 output.println("Invalid reader selection.");
-                return 1;
+                return;
             }
 
             String readerName = readers.get(selection);
-            output.printf("Waiting for a card on %s...%n", readerName);
+            output.printf("Waiting for a %s card on %s...%n",
+                    paymentInterface.displayName().toLowerCase(), readerName);
             if (!readerService.waitForCard(readerName, cardWaitTimeout)) {
                 output.printf("No card detected within %d seconds.%n", cardWaitTimeout.toSeconds());
-                return 2;
+                return;
             }
 
             try (CardSession connection = readerService.connect(readerName)) {
                 output.printf("Reader     : %s%n", connection.readerName());
+                output.printf("Interface  : %s%n", paymentInterface.displayName());
                 output.printf("ATR        : %s%n", HexUtils.toHex(connection.atr()));
                 output.printf("Protocol   : %s%n", connection.protocol());
                 output.println("Connection : SUCCESS");
-                output.println();
-                output.println("Available operations:");
-                output.println("[0] Connection diagnostic only");
-                output.println("[1] SELECT PPSE - Discover payment applications");
-                output.print("Select operation: ");
-
-                if (!input.hasNextLine()) {
-                    output.println();
-                    output.println("Operation selection was not provided.");
-                    return 1;
-                }
-
-                Integer operation = parseSelection(input.nextLine(), 2);
-                if (operation == null) {
-                    output.println("Invalid operation selection.");
-                    return 1;
-                }
-                if (operation == 0) {
-                    output.println("No APDU command was sent.");
-                    return 0;
-                }
-
-                return executeSelectPpse(connection);
+                executeSelectDirectory(connection, paymentInterface);
             }
+            output.println("Connection closed. Returning to main menu.");
         } catch (CardException error) {
             output.println("Connection : FAILED");
             output.println("Error      : " + error.getMessage());
             if (error.getCause() != null) {
                 output.println("Cause      : " + error.getCause().getMessage());
             }
-            return 3;
+            output.println("Returning to main menu.");
         }
     }
 
-    private int executeSelectPpse(CardSession connection) throws CardException {
-        ApduCommand command = EmvCommands.selectPpse();
+    private void executeSelectDirectory(
+            CardSession connection,
+            PaymentInterface paymentInterface) throws CardException {
+        ApduCommand command = paymentInterface.command();
         long startedAt = System.nanoTime();
         ApduResponse response = connection.transmit(command);
         long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
 
         output.println();
-        output.println("Command       : SELECT PPSE");
+        output.printf("Command       : %s%n", paymentInterface.commandName());
         output.printf("APDU          : %s%n", HexUtils.toHex(command.bytes()));
         output.printf("Raw Response  : %s%n", HexUtils.toHex(response.bytes()));
         output.printf("Response Data : %s%n",
@@ -143,12 +163,12 @@ public final class ReaderDiagnosticCommand {
             if (response.data().length == 0) {
                 output.println("                response data is empty");
             }
-            return 0;
+            return;
         }
         if (response.data().length == 0) {
             output.println("TLV Parsing   : SKIPPED");
             output.println("Reason        : response data is empty");
-            return 0;
+            return;
         }
 
         try {
@@ -156,11 +176,9 @@ public final class ReaderDiagnosticCommand {
             output.println("TLV Parsing   : SUCCESS");
             printTlvTree(ppseResponse.tlvNodes());
             printApplications(ppseResponse.applications());
-            return 0;
         } catch (TlvParseException | EmvDataException error) {
             output.println("TLV Parsing   : FAILED");
             output.println("Parse Error   : " + error.getMessage());
-            return 4;
         }
     }
 
@@ -215,5 +233,38 @@ public final class ReaderDiagnosticCommand {
         } catch (NumberFormatException error) {
             return null;
         }
+    }
+
+    private enum PaymentInterface {
+        CONTACT("Contact", "SELECT PSE") {
+            @Override
+            ApduCommand command() {
+                return EmvCommands.selectPse();
+            }
+        },
+        CONTACTLESS("Contactless", "SELECT PPSE") {
+            @Override
+            ApduCommand command() {
+                return EmvCommands.selectPpse();
+            }
+        };
+
+        private final String displayName;
+        private final String commandName;
+
+        PaymentInterface(String displayName, String commandName) {
+            this.displayName = displayName;
+            this.commandName = commandName;
+        }
+
+        String displayName() {
+            return displayName;
+        }
+
+        String commandName() {
+            return commandName;
+        }
+
+        abstract ApduCommand command();
     }
 }
