@@ -3,6 +3,8 @@ package com.emvcardinspector.emv;
 import com.emvcardinspector.apdu.ApduCommand;
 import com.emvcardinspector.util.HexUtils;
 
+import java.util.Objects;
+
 /** Approved read-only EMV commands used by the inspector. */
 public final class EmvCommands {
     private static final String SELECT_PSE_APDU =
@@ -21,6 +23,24 @@ public final class EmvCommands {
     /** Selects the contactless EMV payment-system environment named 2PAY.SYS.DDF01. */
     public static ApduCommand selectPpse() {
         return new ApduCommand(HexUtils.fromHex(SELECT_PPSE_APDU));
+    }
+
+    /** Selects one advertised EMV payment application by its AID. */
+    public static ApduCommand selectApplication(byte[] aid) {
+        Objects.requireNonNull(aid, "aid");
+        if (aid.length < 5 || aid.length > 16) {
+            throw new IllegalArgumentException("AID must contain between 5 and 16 bytes");
+        }
+
+        byte[] command = new byte[6 + aid.length];
+        command[0] = 0x00;
+        command[1] = (byte) 0xA4;
+        command[2] = 0x04;
+        command[3] = 0x00;
+        command[4] = (byte) aid.length;
+        System.arraycopy(aid, 0, command, 5, aid.length);
+        command[command.length - 1] = 0x00;
+        return new ApduCommand(command);
     }
 
     /** Reads one record from an EMV short file. */

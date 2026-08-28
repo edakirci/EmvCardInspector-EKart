@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class EmvCommandsTest {
     @Test
@@ -33,6 +34,22 @@ class EmvCommandsTest {
         assertArrayEquals("2PAY.SYS.DDF01".getBytes(StandardCharsets.US_ASCII),
                 commandApdu.getData());
         assertEquals(256, commandApdu.getNe());
+    }
+
+    @Test
+    void buildsSelectApplicationCommandFromAid() {
+        byte[] aid = HexUtils.fromHex("A0000000041010");
+
+        assertEquals(
+                "00A4040007A000000004101000",
+                HexUtils.toHex(EmvCommands.selectApplication(aid).bytes()));
+    }
+
+    @Test
+    void rejectsSelectApplicationAidOutsideEmvLengthRange() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> EmvCommands.selectApplication(HexUtils.fromHex("A0000000")));
     }
 
     @Test

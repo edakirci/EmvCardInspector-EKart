@@ -65,6 +65,12 @@ Application Label ve `87` Application Priority Indicator alanları doğrulanarak
 ayrı bir ödeme uygulamaları özetine çıkarılır. Başarısız durum kodlarında veya
 boş cevap verisinde ayrıştırma yapılmaz ve atlanma nedeni gösterilir.
 
+Keşfedilen her ödeme uygulaması daha sonra kendi AID değeriyle seçilir. Başarılı
+`SELECT AID` cevabı BER-TLV olarak ayrıştırılır; AID'nin RID bölümünden Visa,
+Mastercard ve diğer desteklenen ödeme ağları belirlenir. Kartın verdiği `50`
+Application Label, `9F12` Application Preferred Name ve `9F38` PDOL alanları
+uygulama bazlı bir dal altında gösterilir.
+
 Temaslı PSE cevabındaki `88` Short File Identifier alanı ayrıştırılır. Uygulama,
 bu SFI üzerindeki yalnızca ilk kaydı `READ RECORD 1` ile okur. İlk kayıttaki
 ödeme uygulamaları PPSE ile aynı özet biçiminde gösterilir.

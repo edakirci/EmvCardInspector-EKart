@@ -62,14 +62,16 @@ class ReaderDiagnosticCommandTest {
         FakeReaderService readerService = new FakeReaderService(
                 List.of("Contact", "Contactless"),
                 true,
-                successfulPpseResponse());
+                successfulPpseResponse(),
+                selectedVisaResponse(),
+                selectedDebitMastercardResponse());
 
         CommandResult result = runCommand(readerService, "2\n0\n");
 
         assertEquals(0, result.exitCode());
         assertNotNull(readerService.session.transmittedCommand);
         assertEquals("00A404000E325041592E5359532E444446303100",
-                HexUtils.toHex(readerService.session.transmittedCommand.bytes()));
+                HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
         assertTrue(readerService.session.closed);
         assertTrue(result.output().contains("Interface  : Contactless"));
         assertTrue(result.output().contains("Command       : SELECT PPSE"));
@@ -88,6 +90,15 @@ class ReaderDiagnosticCommandTest {
         assertTrue(result.output().contains("Priority Indicator : 81"));
         assertTrue(result.output().contains("AID                : A0000000041010"));
         assertTrue(result.output().contains("Application Label  : MASTERCARD"));
+        assertEquals(3, readerService.session.transmittedCommands.size());
+        assertEquals("00A4040007A000000003101000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
+        assertEquals("00A4040007A000000004101000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
+        assertTrue(result.output().contains("Application Branch [0]"));
+        assertTrue(result.output().contains("Scheme          : Visa"));
+        assertTrue(result.output().contains("Application     : Debit Mastercard"));
+        assertTrue(result.output().contains("PDOL            : 9F1A02"));
     }
 
     @Test
@@ -97,18 +108,21 @@ class ReaderDiagnosticCommandTest {
                 true,
                 new ApduResponse(new byte[0], 0x6D00),
                 successfulPseResponse(),
-                successfulPseRecordVisa());
+                successfulPseRecordVisa(),
+                selectedVisaResponse());
 
         CommandResult result = runCommand(readerService, "1\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertEquals(3, readerService.session.transmittedCommands.size());
+        assertEquals(4, readerService.session.transmittedCommands.size());
         assertEquals("00A404000E315041592E5359532E444446303100",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
         assertEquals("00A404000E315041592E5359532E444446303100",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
         assertEquals("00B2010C00",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
+        assertEquals("00A4040007A000000003101000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(3).bytes()));
         assertTrue(result.output().contains("Card readiness: first SELECT returned 6D00"));
         assertTrue(result.output().contains("TLV Parsing   : SUCCESS"));
         assertTrue(result.output().contains("Payment Applications: 1"));
@@ -165,16 +179,19 @@ class ReaderDiagnosticCommandTest {
                 List.of("Contact", "Contactless"),
                 true,
                 successfulPseResponse(),
-                successfulPseRecordVisa());
+                successfulPseRecordVisa(),
+                selectedVisaResponse());
 
         CommandResult result = runCommand(readerService, "1\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertEquals(2, readerService.session.transmittedCommands.size());
+        assertEquals(3, readerService.session.transmittedCommands.size());
         assertEquals("00A404000E315041592E5359532E444446303100",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
         assertEquals("00B2010C00",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
+        assertEquals("00A4040007A000000003101000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
         assertTrue(readerService.session.closed);
         assertTrue(result.output().contains("Interface  : Contact"));
         assertTrue(result.output().contains("Command       : SELECT PSE"));
@@ -184,6 +201,8 @@ class ReaderDiagnosticCommandTest {
         assertFalse(result.output().contains("READ RECORD 2"));
         assertTrue(result.output().contains("Payment Applications: 1"));
         assertTrue(result.output().contains("AID                : A0000000031010"));
+        assertTrue(result.output().contains("Application Branch [0]"));
+        assertTrue(result.output().contains("Application     : Visa Debit"));
         assertTrue(result.output().contains("Connection closed. Returning to main menu."));
         assertEquals(2, countOccurrences(result.output(), "Main menu:"));
     }
@@ -236,6 +255,21 @@ class ReaderDiagnosticCommandTest {
     private static ApduResponse successfulPseRecordVisa() {
         return new ApduResponse(HexUtils.fromHex(
                 "701461124F07A0000000031010500456495341870181"), 0x9000);
+    }
+
+    private static ApduResponse selectedVisaResponse() {
+        return new ApduResponse(HexUtils.fromHex(
+                "6F1D8407A0000000031010A512"
+                        + "500A56697361204465626974"
+                        + "9F38039F1A02"), 0x9000);
+    }
+
+    private static ApduResponse selectedDebitMastercardResponse() {
+        return new ApduResponse(HexUtils.fromHex(
+                "6F368407A0000000041010A52B"
+                        + "50104465626974204D617374657263617264"
+                        + "9F12104465626974204D617374657263617264"
+                        + "9F38039F1A02"), 0x9000);
     }
 
     private static final class FakeReaderService implements CardReaderService {

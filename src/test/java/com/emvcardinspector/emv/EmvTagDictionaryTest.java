@@ -21,6 +21,12 @@ class EmvTagDictionaryTest {
         assertEquals("Application Priority Indicator", dictionary.find("87").orElseThrow().name());
         assertEquals("Short File Identifier", dictionary.find("88").orElseThrow().name());
         assertEquals("Record Template", dictionary.find("70").orElseThrow().name());
+        assertEquals("Application Preferred Name", dictionary.find("9F12").orElseThrow().name());
+        assertEquals("Processing Options Data Object List", dictionary.find("9F38").orElseThrow().name());
+        assertEquals("Language Preference", dictionary.find("5F2D").orElseThrow().name());
+        assertEquals("Issuer Code Table Index", dictionary.find("9F11").orElseThrow().name());
+        assertEquals("Log Entry", dictionary.find("9F4D").orElseThrow().name());
+        assertEquals("Third Party Data", dictionary.find("9F6E").orElseThrow().name());
     }
 
     @Test

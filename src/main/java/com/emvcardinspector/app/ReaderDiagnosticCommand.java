@@ -7,6 +7,9 @@ import com.emvcardinspector.emv.EmvApplication;
 import com.emvcardinspector.emv.EmvCommands;
 import com.emvcardinspector.emv.EmvDataException;
 import com.emvcardinspector.emv.EmvTagDictionary;
+import com.emvcardinspector.emv.ApplicationSelectionResponse;
+import com.emvcardinspector.emv.ApplicationSelectionResponseParser;
+import com.emvcardinspector.emv.PaymentScheme;
 import com.emvcardinspector.emv.PpseResponse;
 import com.emvcardinspector.emv.PpseResponseParser;
 import com.emvcardinspector.emv.PseResponse;
@@ -37,6 +40,7 @@ public final class ReaderDiagnosticCommand {
     private final Duration cardWaitTimeout;
     private final PpseResponseParser ppseResponseParser;
     private final PseResponseParser pseResponseParser;
+    private final ApplicationSelectionResponseParser applicationSelectionResponseParser;
     private final EmvTagDictionary tagDictionary;
 
     public ReaderDiagnosticCommand(
@@ -50,6 +54,7 @@ public final class ReaderDiagnosticCommand {
         this.cardWaitTimeout = Objects.requireNonNull(cardWaitTimeout, "cardWaitTimeout");
         this.ppseResponseParser = new PpseResponseParser();
         this.pseResponseParser = new PseResponseParser();
+        this.applicationSelectionResponseParser = new ApplicationSelectionResponseParser();
         this.tagDictionary = EmvTagDictionary.standard();
     }
 
@@ -191,6 +196,7 @@ public final class ReaderDiagnosticCommand {
                 output.println("TLV Parsing   : SUCCESS");
                 printTlvTree(ppseResponse.tlvNodes());
                 printApplications(ppseResponse.applications());
+                selectApplications(connection, ppseResponse.applications());
             }
         } catch (TlvParseException | EmvDataException error) {
             output.println("TLV Parsing   : FAILED");
@@ -251,6 +257,59 @@ public final class ReaderDiagnosticCommand {
             output.println("Parse Error   : " + error.getMessage());
         }
         printApplications(applications);
+        selectApplications(connection, applications);
+    }
+
+    private void selectApplications(
+            CardSession connection,
+            List<EmvApplication> applications) throws CardException {
+        for (int index = 0; index < applications.size(); index++) {
+            EmvApplication application = applications.get(index);
+            PaymentScheme scheme = PaymentScheme.fromAid(application.aid());
+            ApduCommand command = EmvCommands.selectApplication(application.aid());
+            long startedAt = System.nanoTime();
+            ApduResponse response = connection.transmit(command);
+            long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
+
+            output.println();
+            output.printf("Application Branch [%d]%n", index);
+            output.printf("  Scheme          : %s%n", scheme.displayName());
+            output.printf("  AID             : %s%n", application.aidHex());
+            output.printf("  Directory Label : %s%n", application.label().orElse("<not provided>"));
+            output.printf("  Command         : SELECT AID%n");
+            output.printf("  APDU            : %s%n", HexUtils.toHex(command.bytes()));
+            output.printf("  Raw Response    : %s%n", HexUtils.toHex(response.bytes()));
+            output.printf("  Status Word     : %04X%n", response.statusWord());
+            output.printf("  Status          : %s%n", StatusWord.describe(response.statusWord()));
+            output.printf("  Duration        : %d ms%n", durationMillis);
+
+            if (!response.isSuccess()) {
+                output.println("  FCI Parsing     : SKIPPED");
+                output.printf("  Reason          : status word %04X is not successful%n", response.statusWord());
+                continue;
+            }
+            if (response.data().length == 0) {
+                output.println("  FCI Parsing     : SKIPPED");
+                output.println("  Reason          : response data is empty");
+                continue;
+            }
+
+            try {
+                ApplicationSelectionResponse selected = applicationSelectionResponseParser.parse(response.data());
+                String applicationName = selected.preferredName()
+                        .or(() -> selected.label())
+                        .or(() -> application.label())
+                        .orElse("<not provided>");
+                output.println("  FCI Parsing     : SUCCESS");
+                output.printf("  Application     : %s%n", applicationName);
+                output.printf("  Preferred Name  : %s%n", selected.preferredName().orElse("<not provided>"));
+                output.printf("  PDOL            : %s%n", selected.pdolHex().orElse("<not provided>"));
+                printTlvTree(selected.tlvNodes());
+            } catch (TlvParseException | EmvDataException error) {
+                output.println("  FCI Parsing     : FAILED");
+                output.println("  Parse Error     : " + error.getMessage());
+            }
+        }
     }
 
     private void printTlvTree(List<TlvNode> nodes) {
