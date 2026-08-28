@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -31,25 +32,28 @@ class ReaderDiagnosticCommandTest {
     }
 
     @Test
-    void rejectsReaderSelectionOutsideAvailableRange() {
+    void reportsWhenNoMatchingReaderIsAvailable() {
         CommandResult result = runCommand(
-                new FakeReaderService(List.of("Contact", "Contactless"), false),
-                "1\n7\n0\n");
+                new FakeReaderService(List.of("Identiv uTrust 5422 Smartcard Reader"), false),
+                "2\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.output().contains("Invalid reader selection"));
+        assertTrue(result.output().contains("No contactless PC/SC reader found"));
+        assertTrue(result.output().contains("Identiv uTrust 5422 Smartcard Reader"));
     }
 
     @Test
     void waitsForCardOnSelectedReaderAndReportsTimeout() {
         FakeReaderService readerService = new FakeReaderService(
-                List.of("Contact", "Contactless"),
+                List.of("Identiv uTrust 5422 Smartcard Reader", "Identiv uTrust 5422CL"),
                 false);
 
-        CommandResult result = runCommand(readerService, "2\n1\n0\n");
+        CommandResult result = runCommand(readerService, "2\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertEquals("Contactless", readerService.waitedReaderName);
+        assertEquals("Identiv uTrust 5422CL", readerService.waitedReaderName);
+        assertTrue(result.output().contains(
+                "Reader selected automatically: Identiv uTrust 5422CL"));
         assertTrue(result.output().contains("No card detected within 15 seconds"));
     }
 
@@ -60,7 +64,7 @@ class ReaderDiagnosticCommandTest {
                 true,
                 successfulPpseResponse());
 
-        CommandResult result = runCommand(readerService, "2\n1\n0\n");
+        CommandResult result = runCommand(readerService, "2\n0\n");
 
         assertEquals(0, result.exitCode());
         assertNotNull(readerService.session.transmittedCommand);
@@ -87,13 +91,37 @@ class ReaderDiagnosticCommandTest {
     }
 
     @Test
+    void retriesSelectOnceWhenNewlyInsertedContactCardIsNotReady() {
+        FakeReaderService readerService = new FakeReaderService(
+                List.of("Contact", "Contactless"),
+                true,
+                new ApduResponse(new byte[0], 0x6D00),
+                successfulPseResponse(),
+                successfulPseRecordVisa());
+
+        CommandResult result = runCommand(readerService, "1\n0\n");
+
+        assertEquals(0, result.exitCode());
+        assertEquals(3, readerService.session.transmittedCommands.size());
+        assertEquals("00A404000E315041592E5359532E444446303100",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
+        assertEquals("00A404000E315041592E5359532E444446303100",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
+        assertEquals("00B2010C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
+        assertTrue(result.output().contains("Card readiness: first SELECT returned 6D00"));
+        assertTrue(result.output().contains("TLV Parsing   : SUCCESS"));
+        assertTrue(result.output().contains("Payment Applications: 1"));
+    }
+
+    @Test
     void skipsTlvParsingWhenStatusWordIsNotSuccessful() {
         FakeReaderService readerService = new FakeReaderService(
                 List.of("Contactless"),
                 true,
                 new ApduResponse(new byte[0], 0x6700));
 
-        CommandResult result = runCommand(readerService, "2\n0\n0\n");
+        CommandResult result = runCommand(readerService, "2\n0\n");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("TLV Parsing   : SKIPPED"));
@@ -109,7 +137,7 @@ class ReaderDiagnosticCommandTest {
                 true,
                 new ApduResponse(new byte[0], 0x9000));
 
-        CommandResult result = runCommand(readerService, "2\n0\n0\n");
+        CommandResult result = runCommand(readerService, "2\n0\n");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("TLV Parsing   : SKIPPED"));
@@ -124,7 +152,7 @@ class ReaderDiagnosticCommandTest {
                 true,
                 new ApduResponse(HexUtils.fromHex("6F035A0201"), 0x9000));
 
-        CommandResult result = runCommand(readerService, "2\n0\n0\n");
+        CommandResult result = runCommand(readerService, "2\n0\n");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("TLV Parsing   : FAILED"));
@@ -132,21 +160,30 @@ class ReaderDiagnosticCommandTest {
     }
 
     @Test
-    void sendsSelectPseForContactAndReturnsToMainMenu() {
+    void readsOnlyFirstPseDirectoryRecordForContactAndReturnsToMainMenu() {
         FakeReaderService readerService = new FakeReaderService(
                 List.of("Contact", "Contactless"),
                 true,
-                successfulPpseResponse());
+                successfulPseResponse(),
+                successfulPseRecordVisa());
 
-        CommandResult result = runCommand(readerService, "1\n0\n0\n");
+        CommandResult result = runCommand(readerService, "1\n0\n");
 
         assertEquals(0, result.exitCode());
-        assertNotNull(readerService.session.transmittedCommand);
+        assertEquals(2, readerService.session.transmittedCommands.size());
         assertEquals("00A404000E315041592E5359532E444446303100",
-                HexUtils.toHex(readerService.session.transmittedCommand.bytes()));
+                HexUtils.toHex(readerService.session.transmittedCommands.get(0).bytes()));
+        assertEquals("00B2010C00",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
         assertTrue(readerService.session.closed);
         assertTrue(result.output().contains("Interface  : Contact"));
         assertTrue(result.output().contains("Command       : SELECT PSE"));
+        assertTrue(result.output().contains("- 88 | Short File Identifier | primitive"));
+        assertTrue(result.output().contains("PSE Directory SFI: 1"));
+        assertTrue(result.output().contains("Command       : READ RECORD 1 (SFI 1)"));
+        assertFalse(result.output().contains("READ RECORD 2"));
+        assertTrue(result.output().contains("Payment Applications: 1"));
+        assertTrue(result.output().contains("AID                : A0000000031010"));
         assertTrue(result.output().contains("Connection closed. Returning to main menu."));
         assertEquals(2, countOccurrences(result.output(), "Main menu:"));
     }
@@ -191,6 +228,16 @@ class ReaderDiagnosticCommandTest {
                 0x9000);
     }
 
+    private static ApduResponse successfulPseResponse() {
+        return new ApduResponse(HexUtils.fromHex(
+                "6F15840E315041592E5359532E4444463031A503880101"), 0x9000);
+    }
+
+    private static ApduResponse successfulPseRecordVisa() {
+        return new ApduResponse(HexUtils.fromHex(
+                "701461124F07A0000000031010500456495341870181"), 0x9000);
+    }
+
     private static final class FakeReaderService implements CardReaderService {
         private final List<String> readerNames;
         private final boolean cardPresent;
@@ -204,10 +251,10 @@ class ReaderDiagnosticCommandTest {
         private FakeReaderService(
                 List<String> readerNames,
                 boolean cardPresent,
-                ApduResponse response) {
+                ApduResponse... responses) {
             this.readerNames = readerNames;
             this.cardPresent = cardPresent;
-            this.session = new FakeCardSession(response);
+            this.session = new FakeCardSession(responses);
         }
 
         @Override
@@ -231,12 +278,13 @@ class ReaderDiagnosticCommandTest {
     }
 
     private static final class FakeCardSession implements CardSession {
-        private final ApduResponse response;
+        private final List<ApduResponse> responses;
+        private final List<ApduCommand> transmittedCommands = new ArrayList<>();
         private ApduCommand transmittedCommand;
         private boolean closed;
 
-        private FakeCardSession(ApduResponse response) {
-            this.response = response;
+        private FakeCardSession(ApduResponse... responses) {
+            this.responses = List.of(responses);
         }
 
         @Override
@@ -257,7 +305,12 @@ class ReaderDiagnosticCommandTest {
         @Override
         public ApduResponse transmit(ApduCommand command) {
             transmittedCommand = command;
-            return response;
+            transmittedCommands.add(command);
+            int responseIndex = transmittedCommands.size() - 1;
+            if (responseIndex >= responses.size()) {
+                throw new AssertionError("No fake response configured for APDU " + responseIndex);
+            }
+            return responses.get(responseIndex);
         }
 
         @Override

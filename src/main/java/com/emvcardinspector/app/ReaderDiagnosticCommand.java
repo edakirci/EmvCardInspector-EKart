@@ -9,6 +9,8 @@ import com.emvcardinspector.emv.EmvDataException;
 import com.emvcardinspector.emv.EmvTagDictionary;
 import com.emvcardinspector.emv.PpseResponse;
 import com.emvcardinspector.emv.PpseResponseParser;
+import com.emvcardinspector.emv.PseResponse;
+import com.emvcardinspector.emv.PseResponseParser;
 import com.emvcardinspector.reader.CardReaderService;
 import com.emvcardinspector.reader.CardSession;
 import com.emvcardinspector.tlv.TlvNode;
@@ -18,17 +20,23 @@ import com.emvcardinspector.util.HexUtils;
 import javax.smartcardio.CardException;
 import java.io.PrintStream;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Scanner;
 
 /** Interactive PC/SC diagnostic and approved read-only card operations. */
 public final class ReaderDiagnosticCommand {
+    private static final long CARD_READY_RETRY_DELAY_MILLIS = 250;
+
     private final CardReaderService readerService;
     private final Scanner input;
     private final PrintStream output;
     private final Duration cardWaitTimeout;
     private final PpseResponseParser ppseResponseParser;
+    private final PseResponseParser pseResponseParser;
     private final EmvTagDictionary tagDictionary;
 
     public ReaderDiagnosticCommand(
@@ -41,6 +49,7 @@ public final class ReaderDiagnosticCommand {
         this.output = Objects.requireNonNull(output, "output");
         this.cardWaitTimeout = Objects.requireNonNull(cardWaitTimeout, "cardWaitTimeout");
         this.ppseResponseParser = new PpseResponseParser();
+        this.pseResponseParser = new PseResponseParser();
         this.tagDictionary = EmvTagDictionary.standard();
     }
 
@@ -90,27 +99,17 @@ public final class ReaderDiagnosticCommand {
                 return;
             }
 
-            output.println();
-            output.println("Available PC/SC readers:");
-            for (int index = 0; index < readers.size(); index++) {
-                output.printf("[%d] %s%n", index, readers.get(index));
-            }
-            output.print("Select reader (or B to go back): ");
-            if (!input.hasNextLine()) {
+            Optional<String> matchingReader = paymentInterface.findReader(readers);
+            if (matchingReader.isEmpty()) {
+                output.printf("No %s PC/SC reader found.%n",
+                        paymentInterface.displayName().toLowerCase(Locale.ROOT));
+                output.println("Detected readers:");
+                readers.forEach(reader -> output.println("- " + reader));
                 return;
             }
 
-            String readerSelection = input.nextLine().trim();
-            if (readerSelection.equalsIgnoreCase("B")) {
-                return;
-            }
-            Integer selection = parseSelection(readerSelection, readers.size());
-            if (selection == null) {
-                output.println("Invalid reader selection.");
-                return;
-            }
-
-            String readerName = readers.get(selection);
+            String readerName = matchingReader.get();
+            output.printf("Reader selected automatically: %s%n", readerName);
             output.printf("Waiting for a %s card on %s...%n",
                     paymentInterface.displayName().toLowerCase(), readerName);
             if (!readerService.waitForCard(readerName, cardWaitTimeout)) {
@@ -143,6 +142,15 @@ public final class ReaderDiagnosticCommand {
         ApduCommand command = paymentInterface.command();
         long startedAt = System.nanoTime();
         ApduResponse response = connection.transmit(command);
+        if (shouldRetrySelect(response)) {
+            output.printf("Card readiness: first SELECT returned %04X with empty data; "
+                            + "retrying once after %d ms.%n",
+                    response.statusWord(),
+                    CARD_READY_RETRY_DELAY_MILLIS);
+            waitBeforeSelectRetry();
+            startedAt = System.nanoTime();
+            response = connection.transmit(command);
+        }
         long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
 
         output.println();
@@ -172,14 +180,77 @@ public final class ReaderDiagnosticCommand {
         }
 
         try {
-            PpseResponse ppseResponse = ppseResponseParser.parse(response.data());
-            output.println("TLV Parsing   : SUCCESS");
-            printTlvTree(ppseResponse.tlvNodes());
-            printApplications(ppseResponse.applications());
+            if (paymentInterface == PaymentInterface.CONTACT) {
+                PseResponse pseResponse = pseResponseParser.parse(response.data());
+                output.println("TLV Parsing   : SUCCESS");
+                printTlvTree(pseResponse.tlvNodes());
+                output.printf("PSE Directory SFI: %d%n", pseResponse.directorySfi());
+                readFirstPseDirectoryRecord(connection, pseResponse.directorySfi());
+            } else {
+                PpseResponse ppseResponse = ppseResponseParser.parse(response.data());
+                output.println("TLV Parsing   : SUCCESS");
+                printTlvTree(ppseResponse.tlvNodes());
+                printApplications(ppseResponse.applications());
+            }
         } catch (TlvParseException | EmvDataException error) {
             output.println("TLV Parsing   : FAILED");
             output.println("Parse Error   : " + error.getMessage());
         }
+    }
+
+    private boolean shouldRetrySelect(ApduResponse response) {
+        return response.statusWord() == StatusWord.INSTRUCTION_NOT_SUPPORTED.code()
+                && response.data().length == 0;
+    }
+
+    private void waitBeforeSelectRetry() throws CardException {
+        try {
+            Thread.sleep(CARD_READY_RETRY_DELAY_MILLIS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new CardException("Interrupted while waiting for the card to become ready", error);
+        }
+    }
+
+    private void readFirstPseDirectoryRecord(CardSession connection, int sfi) throws CardException {
+        List<EmvApplication> applications = new ArrayList<>();
+        int recordNumber = 1;
+        ApduCommand command = EmvCommands.readRecord(recordNumber, sfi);
+        long startedAt = System.nanoTime();
+        ApduResponse response = connection.transmit(command);
+        long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        output.println();
+        output.printf("Command       : READ RECORD %d (SFI %d)%n", recordNumber, sfi);
+        output.printf("APDU          : %s%n", HexUtils.toHex(command.bytes()));
+        output.printf("Raw Response  : %s%n", HexUtils.toHex(response.bytes()));
+        output.printf("Status Word   : %04X%n", response.statusWord());
+        output.printf("Status        : %s%n", StatusWord.describe(response.statusWord()));
+        output.printf("Duration      : %d ms%n", durationMillis);
+
+        if (!response.isSuccess()) {
+            output.println("Record Parsing: SKIPPED");
+            output.printf("Reason        : status word %04X is not successful%n", response.statusWord());
+            printApplications(applications);
+            return;
+        }
+        if (response.data().length == 0) {
+            output.println("Record Parsing: SKIPPED");
+            output.println("Reason        : response data is empty");
+            printApplications(applications);
+            return;
+        }
+
+        try {
+            PpseResponse record = ppseResponseParser.parse(response.data());
+            output.println("Record Parsing: SUCCESS");
+            printTlvTree(record.tlvNodes());
+            applications.addAll(record.applications());
+        } catch (TlvParseException | EmvDataException error) {
+            output.println("Record Parsing: FAILED");
+            output.println("Parse Error   : " + error.getMessage());
+        }
+        printApplications(applications);
     }
 
     private void printTlvTree(List<TlvNode> nodes) {
@@ -226,26 +297,27 @@ public final class ReaderDiagnosticCommand {
         }
     }
 
-    private static Integer parseSelection(String text, int readerCount) {
-        try {
-            int selection = Integer.parseInt(text.trim());
-            return selection >= 0 && selection < readerCount ? selection : null;
-        } catch (NumberFormatException error) {
-            return null;
-        }
-    }
-
     private enum PaymentInterface {
         CONTACT("Contact", "SELECT PSE") {
             @Override
             ApduCommand command() {
                 return EmvCommands.selectPse();
             }
+
+            @Override
+            boolean acceptsReader(String readerName) {
+                return !isContactlessReader(readerName);
+            }
         },
         CONTACTLESS("Contactless", "SELECT PPSE") {
             @Override
             ApduCommand command() {
                 return EmvCommands.selectPpse();
+            }
+
+            @Override
+            boolean acceptsReader(String readerName) {
+                return isContactlessReader(readerName);
             }
         };
 
@@ -265,6 +337,20 @@ public final class ReaderDiagnosticCommand {
             return commandName;
         }
 
+        Optional<String> findReader(List<String> readerNames) {
+            return readerNames.stream().filter(this::acceptsReader).findFirst();
+        }
+
+        abstract boolean acceptsReader(String readerName);
+
         abstract ApduCommand command();
+
+        private static boolean isContactlessReader(String readerName) {
+            String normalizedName = readerName.toLowerCase(Locale.ROOT);
+            return normalizedName.contains("contactless")
+                    || normalizedName.contains("5422cl")
+                    || normalizedName.contains("picc")
+                    || normalizedName.contains("nfc");
+        }
     }
 }

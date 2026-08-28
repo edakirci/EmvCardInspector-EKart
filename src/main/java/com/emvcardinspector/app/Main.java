@@ -14,7 +14,7 @@ public final class Main {
                 new PcscCardReaderService(),
                 new Scanner(System.in),
                 System.out,
-                Duration.ofSeconds(15));
+                Duration.ofSeconds(30));
         command.run();
     }
 }

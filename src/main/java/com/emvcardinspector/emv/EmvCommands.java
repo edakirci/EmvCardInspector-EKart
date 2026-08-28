@@ -22,4 +22,22 @@ public final class EmvCommands {
     public static ApduCommand selectPpse() {
         return new ApduCommand(HexUtils.fromHex(SELECT_PPSE_APDU));
     }
+
+    /** Reads one record from an EMV short file. */
+    public static ApduCommand readRecord(int recordNumber, int sfi) {
+        if (recordNumber < 1 || recordNumber > 255) {
+            throw new IllegalArgumentException("recordNumber must be between 1 and 255");
+        }
+        if (sfi < 1 || sfi > 30) {
+            throw new IllegalArgumentException("sfi must be between 1 and 30");
+        }
+
+        int p2 = (sfi << 3) | 0x04;
+        return new ApduCommand(new byte[]{
+                0x00,
+                (byte) 0xB2,
+                (byte) recordNumber,
+                (byte) p2,
+                0x00});
+    }
 }

@@ -34,4 +34,14 @@ class EmvCommandsTest {
                 commandApdu.getData());
         assertEquals(256, commandApdu.getNe());
     }
+
+    @Test
+    void buildsReadRecordCommandFromRecordNumberAndSfi() {
+        assertEquals(
+                "00B2010C00",
+                HexUtils.toHex(EmvCommands.readRecord(1, 1).bytes()));
+        assertEquals(
+                "00B2031C00",
+                HexUtils.toHex(EmvCommands.readRecord(3, 3).bytes()));
+    }
 }

@@ -9,6 +9,7 @@ public enum StatusWord {
     WRONG_LENGTH(0x6700, "Wrong length"),
     CONDITIONS_NOT_SATISFIED(0x6985, "Conditions of use not satisfied"),
     FILE_NOT_FOUND(0x6A82, "File or application not found"),
+    RECORD_NOT_FOUND(0x6A83, "Record not found"),
     INSTRUCTION_NOT_SUPPORTED(0x6D00, "Instruction not supported"),
     CLASS_NOT_SUPPORTED(0x6E00, "Class not supported");
 

@@ -20,10 +20,12 @@ public final class EmvTagDictionary {
                 "84", new EmvTag("84", "Dedicated File Name", "Selected PPSE or application name", false),
                 "A5", new EmvTag("A5", "FCI Proprietary Template", "Proprietary FCI data", false),
                 "BF0C", new EmvTag("BF0C", "FCI Issuer Discretionary Data", "Issuer discretionary FCI data", false),
+                "70", new EmvTag("70", "Record Template", "EMV data record template", false),
                 "61", new EmvTag("61", "Application Template", "One advertised payment application", false),
                 "4F", new EmvTag("4F", "Application Identifier", "Application identifier (AID)", false),
                 "50", new EmvTag("50", "Application Label", "Human-readable application label", false),
-                "87", new EmvTag("87", "Application Priority Indicator", "Application selection priority", false)));
+                "87", new EmvTag("87", "Application Priority Indicator", "Application selection priority", false),
+                "88", new EmvTag("88", "Short File Identifier", "PSE directory record location", false)));
     }
 
     public Optional<EmvTag> find(String tag) {

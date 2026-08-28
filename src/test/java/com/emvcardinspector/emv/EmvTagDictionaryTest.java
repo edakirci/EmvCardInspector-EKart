@@ -19,6 +19,8 @@ class EmvTagDictionaryTest {
         assertEquals("Application Identifier", dictionary.find("4F").orElseThrow().name());
         assertEquals("Application Label", dictionary.find("50").orElseThrow().name());
         assertEquals("Application Priority Indicator", dictionary.find("87").orElseThrow().name());
+        assertEquals("Short File Identifier", dictionary.find("88").orElseThrow().name());
+        assertEquals("Record Template", dictionary.find("70").orElseThrow().name());
     }
 
     @Test

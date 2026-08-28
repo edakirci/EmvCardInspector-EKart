@@ -37,26 +37,37 @@ Ardından komut satırı uygulamasını başlatın:
 java -cp target\classes com.emvcardinspector.app.Main
 ```
 
-Uygulama PC/SC okuyucularını listeler, seçilen okuyucuda kartı 15 saniye
-bekler ve bağlantı başarılıysa ATR ile iletişim protokolünü gösterir. Bu
-teşhis adımı karta APDU göndermez.
+Uygulama başlangıç menüsünde temaslı veya temassız kart akışını seçtirir.
+PC/SC okuyucularını algılar, seçilen arayüze uygun okuyucuyu otomatik belirler,
+bu okuyucuda kartı 15 saniye bekler ve
+bağlantı başarılıysa ATR ile iletişim protokolünü gösterir. İşlem tamamlandıktan
+sonra bağlantıyı kapatıp ana menüye döner.
 
-## Salt okunur SELECT PPSE işlemi
+## Salt okunur uygulama keşfi
 
-Bağlantı kurulduktan sonra uygulama iki işlem sunar:
+Ana menüde aşağıdaki işlemler sunulur:
 
-- `0`: Yalnızca bağlantı teşhisi; karta APDU gönderilmez.
-- `1`: Önceden tanımlanmış, salt okunur `SELECT PPSE` komutunu gönderir.
+- `1`: Temaslı kart için `SELECT PSE` komutunu gönderir.
+- `2`: Temassız kart için `SELECT PPSE` komutunu gönderir.
+- `0`: Uygulamadan çıkar.
 
-`SELECT PPSE` sonucunda komut, tam ham cevap, cevap verisi, SW1, SW2, durum
-açıklaması ve işlem süresi gösterilir. Başarılı cevap verisi daha sonra BER-TLV
-olarak ayrıştırılır.
+SELECT sonucunda komut, tam ham cevap, cevap verisi, SW1, SW2, durum açıklaması
+ve işlem süresi gösterilir. Başarılı cevap verisi daha sonra BER-TLV olarak
+ayrıştırılır.
+
+Kart yeni takıldığında ilk `SELECT PSE` veya `SELECT PPSE` boş veriyle `6D00`
+dönerse uygulama kartın hazırlanması için 250 ms bekler ve aynı komutu yalnızca
+bir kez yeniden gönderir.
 
 Başarılı ve veri içeren PPSE cevapları komut satırında BER-TLV ağacı olarak
 gösterilir. `61` Application Template nesnelerinden `4F` AID, isteğe bağlı `50`
 Application Label ve `87` Application Priority Indicator alanları doğrulanarak
 ayrı bir ödeme uygulamaları özetine çıkarılır. Başarısız durum kodlarında veya
 boş cevap verisinde ayrıştırma yapılmaz ve atlanma nedeni gösterilir.
+
+Temaslı PSE cevabındaki `88` Short File Identifier alanı ayrıştırılır. Uygulama,
+bu SFI üzerindeki yalnızca ilk kaydı `READ RECORD 1` ile okur. İlk kayıttaki
+ödeme uygulamaları PPSE ile aynı özet biçiminde gösterilir.
 
 ## Planlanan katmanlar
 
