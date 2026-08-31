@@ -225,7 +225,6 @@ function ResultsDashboard({ response, cardInterface }: { response: CardInspectio
             </div>
             {downloadMessage && <p className="csv-download-message">{downloadMessage}</p>}
             <div className="csv-modal-actions">
-              <button className="button button-secondary" onClick={() => setCsvDocument(null)}>Kapat</button>
               <button className="button button-primary" onClick={() => void downloadCsv()}>İndir</button>
             </div>
           </section>
