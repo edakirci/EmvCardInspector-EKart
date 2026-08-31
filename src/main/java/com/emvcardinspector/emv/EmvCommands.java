@@ -45,7 +45,37 @@ public final class EmvCommands {
 
     /** Requests processing options when the selected application has no PDOL input. */
     public static ApduCommand getProcessingOptions() {
-        return new ApduCommand(HexUtils.fromHex("80A8000002830000"));
+        return getProcessingOptions(new byte[0]);
+    }
+
+    /** Requests processing options using data laid out in the order requested by the card's PDOL. */
+    public static ApduCommand getProcessingOptions(byte[] pdolData) {
+        Objects.requireNonNull(pdolData, "pdolData");
+        if (pdolData.length > 252) {
+            throw new IllegalArgumentException("PDOL data must contain at most 252 bytes");
+        }
+
+        int templateLengthBytes = pdolData.length <= 127 ? 1 : 2;
+        int commandDataLength = 1 + templateLengthBytes + pdolData.length;
+        byte[] command = new byte[6 + commandDataLength];
+        command[0] = (byte) 0x80;
+        command[1] = (byte) 0xA8;
+        command[2] = 0x00;
+        command[3] = 0x00;
+        command[4] = (byte) commandDataLength;
+        command[5] = (byte) 0x83;
+        int pdolOffset;
+        if (pdolData.length <= 127) {
+            command[6] = (byte) pdolData.length;
+            pdolOffset = 7;
+        } else {
+            command[6] = (byte) 0x81;
+            command[7] = (byte) pdolData.length;
+            pdolOffset = 8;
+        }
+        System.arraycopy(pdolData, 0, command, pdolOffset, pdolData.length);
+        command[command.length - 1] = 0x00;
+        return new ApduCommand(command);
     }
 
     /** Reads one record from an EMV short file. */

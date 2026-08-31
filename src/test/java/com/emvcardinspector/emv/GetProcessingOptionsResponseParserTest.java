@@ -39,6 +39,18 @@ class GetProcessingOptionsResponseParserTest {
     }
 
     @Test
+    void extractsAipAndAflFromFormatOneResponse() {
+        GetProcessingOptionsResponse response = parser.parse(
+                HexUtils.fromHex("8006380010010100"));
+
+        assertArrayEquals(HexUtils.fromHex("3800"), response.aip());
+        assertArrayEquals(HexUtils.fromHex("10010100"), response.afl());
+        assertEquals(2, response.aflEntries().getFirst().sfi());
+        assertEquals(1, response.aflEntries().getFirst().firstRecord());
+        assertEquals(1, response.aflEntries().getFirst().lastRecord());
+    }
+
+    @Test
     void rejectsResponseWithoutAip() {
         EmvDataException error = assertThrows(
                 EmvDataException.class,

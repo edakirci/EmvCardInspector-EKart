@@ -23,6 +23,43 @@ Sistem Maven kurulumu ile:
 mvn clean test
 ```
 
+## Masaüstü arayüzünü geliştirme
+
+Java REST API'yi proje kökünde başlatın:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+İlk kurulumda masaüstü bağımlılıklarını yükleyin:
+
+```powershell
+cd desktop
+npm install
+```
+
+React geliştirme sunucusunu ve Electron penceresini birlikte başlatın:
+
+```powershell
+npm run dev
+```
+
+React/TypeScript üretim derlemesini kontrol etmek için:
+
+```powershell
+npm run build
+```
+
+Yerel backend yalnızca `127.0.0.1:8080` adresinde dinler. Bağlantı kontrolü
+`GET /api/health` endpoint'i üzerinden yapılır.
+
+Masaüstü arayüzü önce temaslı veya temassız kart seçimi sunar. Temaslı inceleme
+`POST /api/inspections/contact`, temassız inceleme ise
+`POST /api/inspections/contactless` endpoint'iyle de başlatılabilir. Backend
+uygun okuyucuyu otomatik seçer, kartı en fazla 30 saniye bekler ve salt okunur
+PSE/PPSE, AID seçimi, GPO ve AFL kayıt okuma akışının teknik çıktısını JSON
+cevabında döndürür. Aynı anda yalnızca bir kart incelemesi çalıştırılır.
+
 ## Okuyucu teşhisini çalıştırma
 
 Önce projeyi derleyin:
@@ -71,14 +108,15 @@ Mastercard ve diğer desteklenen ödeme ağları belirlenir. Kartın verdiği `5
 Application Label, `9F12` Application Preferred Name ve `9F38` PDOL alanları
 uygulama bazlı bir dal altında gösterilir.
 
-Temaslı kartta başarılı uygulama seçiminden sonra `80 A8 00 00 02 83 00 00`
-GET PROCESSING OPTIONS komutu gönderilir. Format-2 cevaplarda `77` Response
-Message Template, `82` Application Interchange Profile (AIP) ve `94`
-Application File Locator (AFL) alanları doğrulanır ve TLV ağacıyla birlikte
-gösterilir. Bu GPO adımı henüz temassız akışta çalıştırılmaz.
+Başarılı uygulama seçiminden sonra GET PROCESSING OPTIONS komutu gönderilir.
+Temaslı akış mevcut boş PDOL verisini (`83 00`) kullanır. Temassız akışta kartın
+`9F38` PDOL alanında istediği terminal verileri hazırlanıp `83` şablonuna
+yerleştirilir. Format-1 (`80`) ve format-2 (`77`) cevaplarda `82` Application
+Interchange Profile (AIP) ile `94` Application File Locator (AFL) alanları
+doğrulanır ve TLV ağacıyla birlikte gösterilir.
 
 AFL içindeki her dört byte'lık girdi SFI, ilk kayıt, son kayıt ve offline
-authentication kayıt sayısı olarak ayrıştırılır. Temaslı akışta her AFL girdisi
+authentication kayıt sayısı olarak ayrıştırılır. Her iki akışta her AFL girdisi
 sırayla dolaşılır ve ilan edilen ilk-son kayıt aralığının tamamı ilgili SFI ile
 okunur. Dördüncü byte kayıt atlama bilgisi değildir; yalnızca aralıktaki kaç
 kaydın offline data authentication işlemine dahil olduğunu belirtir. Örneğin

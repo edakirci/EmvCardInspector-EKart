@@ -60,6 +60,13 @@ class EmvCommandsTest {
     }
 
     @Test
+    void buildsGetProcessingOptionsCommandWithPdolData() {
+        assertEquals(
+                "80A80000048302079200",
+                HexUtils.toHex(EmvCommands.getProcessingOptions(HexUtils.fromHex("0792")).bytes()));
+    }
+
+    @Test
     void buildsReadRecordCommandFromRecordNumberAndSfi() {
         assertEquals(
                 "00B2010C00",

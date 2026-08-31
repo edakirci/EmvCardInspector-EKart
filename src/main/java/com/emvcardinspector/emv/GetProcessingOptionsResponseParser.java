@@ -7,9 +7,10 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Objects;
 
-/** Parses the format-2 response returned by GET PROCESSING OPTIONS. */
+/** Parses a format-1 or format-2 response returned by GET PROCESSING OPTIONS. */
 public final class GetProcessingOptionsResponseParser {
-    private static final String RESPONSE_TEMPLATE_TAG = "77";
+    private static final String FORMAT_ONE_RESPONSE_TEMPLATE_TAG = "80";
+    private static final String FORMAT_TWO_RESPONSE_TEMPLATE_TAG = "77";
     private static final String AIP_TAG = "82";
     private static final String AFL_TAG = "94";
 
@@ -26,7 +27,14 @@ public final class GetProcessingOptionsResponseParser {
     public GetProcessingOptionsResponse parse(byte[] responseData) {
         Objects.requireNonNull(responseData, "responseData");
         List<TlvNode> tlvNodes = tlvParser.parse(responseData);
-        TlvNode template = requireExactlyOne(tlvNodes, RESPONSE_TEMPLATE_TAG, "Response Message Template (77)");
+        if (tlvNodes.size() == 1 && tlvNodes.getFirst().tag().hex().equals(FORMAT_ONE_RESPONSE_TEMPLATE_TAG)) {
+            return parseFormatOne(tlvNodes, tlvNodes.getFirst());
+        }
+
+        TlvNode template = requireExactlyOne(
+                tlvNodes,
+                FORMAT_TWO_RESPONSE_TEMPLATE_TAG,
+                "Response Message Template (77)");
         TlvNode aip = requireExactlyOne(template.children(), AIP_TAG, "Application Interchange Profile (82)");
         TlvNode afl = requireExactlyOne(template.children(), AFL_TAG, "Application File Locator (94)");
 
@@ -39,6 +47,25 @@ public final class GetProcessingOptionsResponseParser {
                     afl.offset());
         }
         return new GetProcessingOptionsResponse(tlvNodes, aip.value(), afl.value(), parseAflEntries(afl));
+    }
+
+    private GetProcessingOptionsResponse parseFormatOne(List<TlvNode> tlvNodes, TlvNode template) {
+        byte[] value = template.value();
+        if (value.length < 6 || (value.length - 2) % 4 != 0) {
+            throw new EmvDataException(
+                    "Response Message Template Format 1 (80) must contain a two-byte AIP and one or more four-byte AFL entries",
+                    template.offset());
+        }
+
+        byte[] aip = java.util.Arrays.copyOfRange(value, 0, 2);
+        byte[] aflValue = java.util.Arrays.copyOfRange(value, 2, value.length);
+        TlvNode syntheticAfl = new TlvNode(
+                new com.emvcardinspector.tlv.TlvTag(AFL_TAG, false),
+                aflValue.length,
+                aflValue,
+                template.offset() + 4,
+                List.of());
+        return new GetProcessingOptionsResponse(tlvNodes, aip, aflValue, parseAflEntries(syntheticAfl));
     }
 
     private List<ApplicationFileLocatorEntry> parseAflEntries(TlvNode afl) {

@@ -64,7 +64,11 @@ class ReaderDiagnosticCommandTest {
                 true,
                 successfulPpseResponse(),
                 selectedVisaResponse(),
-                selectedDebitMastercardResponse());
+                successfulSingleRecordGpoResponse(),
+                successfulApplicationRecordResponse(),
+                selectedDebitMastercardResponse(),
+                successfulSingleRecordGpoResponse(),
+                successfulApplicationRecordResponse());
 
         CommandResult result = runCommand(readerService, "2\n0\n");
 
@@ -90,16 +94,26 @@ class ReaderDiagnosticCommandTest {
         assertTrue(result.output().contains("Priority Indicator : 81"));
         assertTrue(result.output().contains("AID                : A0000000041010"));
         assertTrue(result.output().contains("Application Label  : MASTERCARD"));
-        assertEquals(3, readerService.session.transmittedCommands.size());
+        assertEquals(7, readerService.session.transmittedCommands.size());
         assertEquals("00A4040007A000000003101000",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(1).bytes()));
-        assertEquals("00A4040007A000000004101000",
+        assertEquals("80A80000048302079200",
                 HexUtils.toHex(readerService.session.transmittedCommands.get(2).bytes()));
+        assertEquals("00B2011400",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(3).bytes()));
+        assertEquals("00A4040007A000000004101000",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(4).bytes()));
+        assertEquals("80A80000048302079200",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(5).bytes()));
+        assertEquals("00B2011400",
+                HexUtils.toHex(readerService.session.transmittedCommands.get(6).bytes()));
         assertTrue(result.output().contains("Application Branch [0]"));
         assertTrue(result.output().contains("Scheme          : Visa"));
         assertTrue(result.output().contains("Application     : Debit Mastercard"));
         assertTrue(result.output().contains("PDOL            : 9F1A02"));
-        assertFalse(result.output().contains("GET PROCESSING OPTIONS"));
+        assertTrue(result.output().contains("PDOL Data       : 0792"));
+        assertTrue(result.output().contains("GET PROCESSING OPTIONS"));
+        assertTrue(result.output().contains("Command         : READ RECORD 1 (SFI 2)"));
     }
 
     @Test
@@ -370,6 +384,11 @@ class ReaderDiagnosticCommandTest {
                         + "10020201"
                         + "18010200"
                         + "28010200"), 0x9000);
+    }
+
+    private static ApduResponse successfulSingleRecordGpoResponse() {
+        return new ApduResponse(HexUtils.fromHex(
+                "770A82022000940410010100"), 0x9000);
     }
 
     private static ApduResponse successfulApplicationRecordResponse() {

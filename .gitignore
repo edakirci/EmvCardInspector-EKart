@@ -6,3 +6,9 @@ target/
 *.swp
 .DS_Store
 Thumbs.db
+desktop/node_modules/
+desktop/dist/
+desktop/out/
+desktop/*.tsbuildinfo
+desktop/vite.config.js
+desktop/vite.config.d.ts

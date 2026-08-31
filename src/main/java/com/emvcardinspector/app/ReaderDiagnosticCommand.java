@@ -13,6 +13,7 @@ import com.emvcardinspector.emv.ApplicationFileLocatorEntry;
 import com.emvcardinspector.emv.GetProcessingOptionsResponse;
 import com.emvcardinspector.emv.GetProcessingOptionsResponseParser;
 import com.emvcardinspector.emv.PaymentScheme;
+import com.emvcardinspector.emv.PdolDataBuilder;
 import com.emvcardinspector.emv.PpseResponse;
 import com.emvcardinspector.emv.PpseResponseParser;
 import com.emvcardinspector.emv.PseResponse;
@@ -48,6 +49,7 @@ public final class ReaderDiagnosticCommand {
     private final GetProcessingOptionsResponseParser getProcessingOptionsResponseParser;
     private final BerTlvParser applicationRecordParser;
     private final EmvTagDictionary tagDictionary;
+    private final PdolDataBuilder pdolDataBuilder;
 
     public ReaderDiagnosticCommand(
             CardReaderService readerService,
@@ -64,6 +66,7 @@ public final class ReaderDiagnosticCommand {
         this.getProcessingOptionsResponseParser = new GetProcessingOptionsResponseParser();
         this.applicationRecordParser = new BerTlvParser();
         this.tagDictionary = EmvTagDictionary.standard();
+        this.pdolDataBuilder = new PdolDataBuilder();
     }
 
     public int run() {
@@ -76,6 +79,16 @@ public final class ReaderDiagnosticCommand {
             }
             runSingleSession(paymentInterface);
         }
+    }
+
+    /** Runs one non-interactive contact-card inspection for desktop/API callers. */
+    public SessionStatus runContactSession() {
+        return runSingleSession(PaymentInterface.CONTACT);
+    }
+
+    /** Runs one non-interactive contactless-card inspection for desktop/API callers. */
+    public SessionStatus runContactlessSession() {
+        return runSingleSession(PaymentInterface.CONTACTLESS);
     }
 
     private PaymentInterface selectPaymentInterface() {
@@ -104,12 +117,12 @@ public final class ReaderDiagnosticCommand {
         }
     }
 
-    private void runSingleSession(PaymentInterface paymentInterface) {
+    private SessionStatus runSingleSession(PaymentInterface paymentInterface) {
         try {
             List<String> readers = readerService.listReaderNames();
             if (readers.isEmpty()) {
                 output.println("No PC/SC reader found.");
-                return;
+                return SessionStatus.NO_READER;
             }
 
             Optional<String> matchingReader = paymentInterface.findReader(readers);
@@ -118,7 +131,7 @@ public final class ReaderDiagnosticCommand {
                         paymentInterface.displayName().toLowerCase(Locale.ROOT));
                 output.println("Detected readers:");
                 readers.forEach(reader -> output.println("- " + reader));
-                return;
+                return SessionStatus.NO_READER;
             }
 
             String readerName = matchingReader.get();
@@ -127,7 +140,7 @@ public final class ReaderDiagnosticCommand {
                     paymentInterface.displayName().toLowerCase(), readerName);
             if (!readerService.waitForCard(readerName, cardWaitTimeout)) {
                 output.printf("No card detected within %d seconds.%n", cardWaitTimeout.toSeconds());
-                return;
+                return SessionStatus.NO_CARD;
             }
 
             try (CardSession connection = readerService.connect(readerName)) {
@@ -139,6 +152,7 @@ public final class ReaderDiagnosticCommand {
                 executeSelectDirectory(connection, paymentInterface);
             }
             output.println("Connection closed. Returning to main menu.");
+            return SessionStatus.COMPLETED;
         } catch (CardException error) {
             output.println("Connection : FAILED");
             output.println("Error      : " + error.getMessage());
@@ -146,7 +160,15 @@ public final class ReaderDiagnosticCommand {
                 output.println("Cause      : " + error.getCause().getMessage());
             }
             output.println("Returning to main menu.");
+            return SessionStatus.FAILED;
         }
+    }
+
+    public enum SessionStatus {
+        COMPLETED,
+        NO_READER,
+        NO_CARD,
+        FAILED
     }
 
     private void executeSelectDirectory(
@@ -315,9 +337,15 @@ public final class ReaderDiagnosticCommand {
                 output.printf("  PDOL            : %s%n", selected.pdolHex().orElse("<not provided>"));
                 printTlvTree(selected.tlvNodes(), application.aid());
                 if (paymentInterface == PaymentInterface.CONTACT) {
-                    executeGetProcessingOptions(connection, application.aid());
+                    executeGetProcessingOptions(connection, application.aid(), new byte[0]);
                     return;
                 }
+                byte[] pdolData = selected.pdolHex()
+                        .map(pdolDataBuilder::build)
+                        .orElseGet(() -> new byte[0]);
+                output.printf("  PDOL Data       : %s%n",
+                        pdolData.length == 0 ? "<empty>" : HexUtils.toHex(pdolData));
+                executeGetProcessingOptions(connection, application.aid(), pdolData);
             } catch (TlvParseException | EmvDataException error) {
                 output.println("  FCI Parsing     : FAILED");
                 output.println("  Parse Error     : " + error.getMessage());
@@ -325,8 +353,11 @@ public final class ReaderDiagnosticCommand {
         }
     }
 
-    private void executeGetProcessingOptions(CardSession connection, byte[] applicationAid) throws CardException {
-        ApduCommand command = EmvCommands.getProcessingOptions();
+    private void executeGetProcessingOptions(
+            CardSession connection,
+            byte[] applicationAid,
+            byte[] pdolData) throws CardException {
+        ApduCommand command = EmvCommands.getProcessingOptions(pdolData);
         long startedAt = System.nanoTime();
         ApduResponse response = connection.transmit(command);
         long durationMillis = (System.nanoTime() - startedAt) / 1_000_000;

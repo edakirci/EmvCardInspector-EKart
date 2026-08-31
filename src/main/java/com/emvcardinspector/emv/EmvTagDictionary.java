@@ -43,6 +43,7 @@ public final class EmvTagDictionary {
                 Map.entry("BF0C", new EmvTag("BF0C", "FCI Issuer Discretionary Data", "Issuer discretionary FCI data", false)),
                 Map.entry("70", new EmvTag("70", "Record Template", "EMV data record template", false)),
                 Map.entry("77", new EmvTag("77", "Response Message Template Format 2", "Constructed GET PROCESSING OPTIONS response", false)),
+                Map.entry("80", new EmvTag("80", "Response Message Template Format 1", "Primitive GET PROCESSING OPTIONS response containing AIP followed by AFL", false)),
                 Map.entry("82", new EmvTag("82", "Application Interchange Profile", "Card application capabilities", false)),
                 Map.entry("94", new EmvTag("94", "Application File Locator", "Application records available for reading", false)),
                 Map.entry("61", new EmvTag("61", "Application Template", "One advertised payment application", false)),

@@ -1,0 +1,29 @@
+{
+  "name": "emv-card-inspector-desktop",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Desktop user interface for EMV Card Inspector",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail \"npm:dev:ui\" \"npm:dev:electron\"",
+    "dev:ui": "vite --host 127.0.0.1",
+    "dev:electron": "wait-on http://127.0.0.1:5173 && electron .",
+    "build": "tsc -b && vite build",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "electron": "^44.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "wait-on": "^9.1.0"
+  }
+}
