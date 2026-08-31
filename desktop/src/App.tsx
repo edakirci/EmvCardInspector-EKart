@@ -5,6 +5,7 @@ import {
   type InspectionCommand,
   type InspectionViewModel
 } from "./inspectionParser";
+import { createInspectionCsv, type CsvDocument } from "./csvExport";
 
 type BackendStatus = "checking" | "online" | "offline";
 type InspectionStatus = "completed" | "no_reader" | "no_card" | "failed" | "busy";
@@ -113,6 +114,8 @@ function ResultsDashboard({ response, cardInterface }: { response: CardInspectio
   const data = useMemo(() => parseInspectionOutput(response.output), [response.output]);
   const [tagQuery, setTagQuery] = useState("");
   const [expandedCommand, setExpandedCommand] = useState<number | null>(null);
+  const [csvDocument, setCsvDocument] = useState<CsvDocument | null>(null);
+  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const filteredTags = data.tags.filter((tag) => {
     const query = tagQuery.trim().toLocaleLowerCase("tr-TR");
     return !query || tag.tag.toLowerCase().includes(query) || tag.name.toLocaleLowerCase("tr-TR").includes(query);
@@ -127,6 +130,32 @@ function ResultsDashboard({ response, cardInterface }: { response: CardInspectio
     { label: "GPO", detail: "AIP ve AFL", done: hasSuccessfulCommand(data, "GET PROCESSING OPTIONS") },
     { label: "Kayıtlar", detail: `${recordCount} kayıt`, done: recordCount > 0 }
   ];
+
+  function prepareCsv() {
+    setCsvDocument(createInspectionCsv(data, cardInterface, response.durationMillis));
+    setDownloadMessage(null);
+  }
+
+  async function downloadCsv() {
+    if (!csvDocument) return;
+    try {
+      if (window.emvDesktop) {
+        const result = await window.emvDesktop.saveCsv(csvDocument.fileName, csvDocument.content);
+        if (result.saved) setDownloadMessage(`Dosya kaydedildi: ${result.filePath ?? csvDocument.fileName}`);
+        return;
+      }
+
+      const url = URL.createObjectURL(new Blob([csvDocument.content], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = csvDocument.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setDownloadMessage("CSV dosyası indirildi.");
+    } catch (error) {
+      setDownloadMessage(error instanceof Error ? `Dosya kaydedilemedi: ${error.message}` : "Dosya kaydedilemedi.");
+    }
+  }
 
   if (response.status !== "completed") {
     return (
@@ -163,6 +192,45 @@ function ResultsDashboard({ response, cardInterface }: { response: CardInspectio
           <div className="metric"><strong>{data.applications.length}</strong><span>uygulama</span></div>
         </div>
       </section>
+
+      <section className="panel csv-export-panel">
+        <div>
+          <p className="section-label">DIŞA AKTAR</p>
+          <h2>İnceleme verilerini CSV olarak sakla</h2>
+          <p>Bağlantı, uygulama, APDU ve maskelenmiş EMV tag bilgilerini Excel uyumlu bir CSV dosyasına dönüştür.</p>
+        </div>
+        <button className="button button-primary" onClick={prepareCsv}>CSV’ye Dönüştür</button>
+      </section>
+
+      {csvDocument && (
+        <div className="csv-modal-backdrop" role="presentation" onMouseDown={() => setCsvDocument(null)}>
+          <section className="csv-modal" role="dialog" aria-modal="true" aria-labelledby="csv-preview-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="csv-modal-header">
+              <div>
+                <p className="section-label">CSV ÖNİZLEME</p>
+                <h2 id="csv-preview-title">{csvDocument.fileName}</h2>
+                <span>{csvDocument.rows.length} satır · hassas değerler maskeli</span>
+              </div>
+              <button className="csv-close" onClick={() => setCsvDocument(null)} aria-label="Önizlemeyi kapat">×</button>
+            </div>
+            <div className="table-scroll csv-preview-scroll">
+              <table className="data-table">
+                <thead><tr><th>Kategori</th><th>Kayıt</th><th>Alan</th><th>Değer</th></tr></thead>
+                <tbody>{csvDocument.rows.map((row, index) => (
+                  <tr key={`${row.category}-${row.item}-${row.field}-${index}`}>
+                    <td>{row.category}</td><td>{row.item}</td><td>{row.field}</td><td><code>{row.value}</code></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            {downloadMessage && <p className="csv-download-message">{downloadMessage}</p>}
+            <div className="csv-modal-actions">
+              <button className="button button-secondary" onClick={() => setCsvDocument(null)}>Kapat</button>
+              <button className="button button-primary" onClick={() => void downloadCsv()}>İndir</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="panel workflow-panel">
         <div className="panel-heading">

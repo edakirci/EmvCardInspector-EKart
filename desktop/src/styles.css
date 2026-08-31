@@ -367,6 +367,22 @@ code, pre, .mono-value { font-family: "JetBrains Mono", "Cascadia Code", Consola
 .result-icon { display: grid; width: 47px; height: 47px; place-items: center; border-radius: 14px; color: #341016; background: #ff7d8c; font-size: 1.2rem; font-weight: 900; }
 .compact-details { grid-column: 1 / -1; width: 100%; }
 
+.csv-export-panel { display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+.csv-export-panel h2 { margin-bottom: 7px; }
+.csv-export-panel p:last-child { max-width: 760px; margin-bottom: 0; color: #8296b3; line-height: 1.55; }
+.csv-export-panel .button { flex: 0 0 auto; }
+.button-secondary { border: 1px solid #344a69; color: #a9bdd7; background: #17263b; }
+.csv-modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; padding: 32px; place-items: center; background: rgba(2, 7, 15, 0.78); backdrop-filter: blur(8px); }
+.csv-modal { display: flex; width: min(1080px, 100%); max-height: min(820px, calc(100vh - 64px)); padding: 24px; overflow: hidden; border: 1px solid #314967; border-radius: 20px; background: #0c1829; box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48); flex-direction: column; }
+.csv-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.csv-modal-header h2 { margin-bottom: 6px; overflow-wrap: anywhere; }
+.csv-modal-header span { color: #8296b3; font-size: 0.75rem; }
+.csv-close { width: 36px; height: 36px; border: 1px solid #344a69; border-radius: 10px; color: #9db0ca; background: #142238; cursor: pointer; font-size: 1.35rem; }
+.csv-preview-scroll { min-height: 180px; overflow: auto; }
+.csv-preview-scroll td:last-child { min-width: 240px; overflow-wrap: anywhere; }
+.csv-download-message { margin: 14px 0 0; color: #62d5aa; font-size: 0.75rem; overflow-wrap: anywhere; }
+.csv-modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 18px; }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes progress { 0% { transform: translateX(-110%); } 60%, 100% { transform: translateX(300%); } }
 @keyframes reader-pulse { 50% { transform: translateY(-3px); box-shadow: 0 20px 34px rgba(50, 129, 236, 0.28); } }
@@ -406,6 +422,9 @@ code, pre, .mono-value { font-family: "JetBrains Mono", "Cascadia Code", Consola
   .tlv-node { grid-template-columns: auto auto minmax(150px, 1fr); }
   .tlv-node > code, .tlv-node > .sensitive-label { grid-column: 3; }
   .raw-exchange-grid > div { grid-template-columns: 1fr; }
+  .csv-export-panel { align-items: stretch; flex-direction: column; }
+  .csv-modal-backdrop { padding: 14px; }
+  .csv-modal { max-height: calc(100vh - 28px); padding: 18px; }
 }
 
 /* Light theme: warm white workspace with restrained blue and teal accents. */
@@ -517,3 +536,9 @@ code, pre, .mono-value { font-family: "JetBrains Mono", "Cascadia Code", Consola
 :root[data-theme="light"] .search-box { border-color: #d5dfea; color: #73869d; background: #f5f8fb; }
 :root[data-theme="light"] .search-box input { color: #20344c; }
 :root[data-theme="light"] .tag-code { border-color: #b9cde7; color: #3569aa; background: #edf4fc; }
+:root[data-theme="light"] .csv-export-panel p:last-child,
+:root[data-theme="light"] .csv-modal-header span { color: #6c7e94; }
+:root[data-theme="light"] .csv-modal-backdrop { background: rgba(33, 43, 56, 0.58); }
+:root[data-theme="light"] .csv-modal { border-color: #c6d0db; background: #eef2f5; box-shadow: 0 30px 90px rgba(31, 42, 56, 0.3); }
+:root[data-theme="light"] .csv-close,
+:root[data-theme="light"] .button-secondary { border-color: #c4ced9; color: #4f6680; background: #e0e6ec; }

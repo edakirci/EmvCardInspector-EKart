@@ -1,5 +1,23 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs/promises");
+
+ipcMain.handle("csv:save", async (_event, { fileName, content }) => {
+  if (typeof fileName !== "string" || typeof content !== "string") {
+    throw new TypeError("Invalid CSV save request");
+  }
+  const safeFileName = path.basename(fileName).toLowerCase().endsWith(".csv")
+    ? path.basename(fileName)
+    : `${path.basename(fileName)}.csv`;
+  const result = await dialog.showSaveDialog({
+    title: "CSV raporunu kaydet",
+    defaultPath: safeFileName,
+    filters: [{ name: "CSV dosyası", extensions: ["csv"] }]
+  });
+  if (result.canceled || !result.filePath) return { saved: false };
+  await fs.writeFile(result.filePath, content, "utf8");
+  return { saved: true, filePath: result.filePath };
+});
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -10,6 +28,7 @@ function createWindow() {
     title: "EMV Card Inspector",
     backgroundColor: "#0b1220",
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
