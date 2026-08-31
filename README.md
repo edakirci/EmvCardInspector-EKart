@@ -50,6 +50,11 @@ React/TypeScript üretim derlemesini kontrol etmek için:
 npm run build
 ```
 
+Başarılı bir kart incelemesinin ardından **CSV’ye Dönüştür** düğmesi; bağlantı,
+ödeme uygulaması, APDU işlem özeti ve EMV tag verilerini önizlemeye hazırlar.
+Hassas tag değerleri CSV içinde de maskeli tutulur. Önizleme penceresindeki
+**İndir** düğmesiyle dosyanın kaydedileceği konum seçilir.
+
 Yerel backend yalnızca `127.0.0.1:8080` adresinde dinler. Bağlantı kontrolü
 `GET /api/health` endpoint'i üzerinden yapılır.
 
