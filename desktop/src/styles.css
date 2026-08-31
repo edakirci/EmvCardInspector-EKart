@@ -367,10 +367,12 @@ code, pre, .mono-value { font-family: "JetBrains Mono", "Cascadia Code", Consola
 .result-icon { display: grid; width: 47px; height: 47px; place-items: center; border-radius: 14px; color: #341016; background: #ff7d8c; font-size: 1.2rem; font-weight: 900; }
 .compact-details { grid-column: 1 / -1; width: 100%; }
 
-.csv-export-panel { display: flex; align-items: center; justify-content: space-between; gap: 28px; }
-.csv-export-panel h2 { margin-bottom: 7px; }
-.csv-export-panel p:last-child { max-width: 760px; margin-bottom: 0; color: #8296b3; line-height: 1.55; }
-.csv-export-panel .button { flex: 0 0 auto; }
+.csv-export-panel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 17px 19px; }
+.csv-export-icon { display: grid; width: 43px; height: 43px; place-items: center; border: 1px solid rgba(100, 151, 231, 0.35); border-radius: 12px; color: #8cb7fb; background: rgba(52, 103, 184, 0.14); font-family: "JetBrains Mono", monospace; font-size: 0.68rem; font-weight: 850; letter-spacing: 0.04em; }
+.csv-export-copy { min-width: 0; }
+.csv-export-panel h2 { margin: 0 0 3px; font-size: 1rem; }
+.csv-export-panel p:last-child { margin: 0; color: #8296b3; font-size: 0.74rem; line-height: 1.45; }
+.csv-export-panel .csv-export-button { width: auto; min-width: 164px; margin: 0; padding: 10px 16px; }
 .button-secondary { border: 1px solid #344a69; color: #a9bdd7; background: #17263b; }
 .csv-modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; padding: 32px; place-items: center; background: rgba(2, 7, 15, 0.78); backdrop-filter: blur(8px); }
 .csv-modal { display: flex; width: min(1080px, 100%); max-height: min(820px, calc(100vh - 64px)); padding: 24px; overflow: hidden; border: 1px solid #314967; border-radius: 20px; background: #0c1829; box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48); flex-direction: column; }
@@ -422,7 +424,8 @@ code, pre, .mono-value { font-family: "JetBrains Mono", "Cascadia Code", Consola
   .tlv-node { grid-template-columns: auto auto minmax(150px, 1fr); }
   .tlv-node > code, .tlv-node > .sensitive-label { grid-column: 3; }
   .raw-exchange-grid > div { grid-template-columns: 1fr; }
-  .csv-export-panel { align-items: stretch; flex-direction: column; }
+  .csv-export-panel { grid-template-columns: auto minmax(0, 1fr); }
+  .csv-export-panel .csv-export-button { grid-column: 1 / -1; width: 100%; }
   .csv-modal-backdrop { padding: 14px; }
   .csv-modal { max-height: calc(100vh - 28px); padding: 18px; }
 }
@@ -538,6 +541,7 @@ code, pre, .mono-value { font-family: "JetBrains Mono", "Cascadia Code", Consola
 :root[data-theme="light"] .tag-code { border-color: #b9cde7; color: #3569aa; background: #edf4fc; }
 :root[data-theme="light"] .csv-export-panel p:last-child,
 :root[data-theme="light"] .csv-modal-header span { color: #6c7e94; }
+:root[data-theme="light"] .csv-export-icon { border-color: #bfd1e8; color: #3d70b1; background: #e8f0f9; }
 :root[data-theme="light"] .csv-modal-backdrop { background: rgba(33, 43, 56, 0.58); }
 :root[data-theme="light"] .csv-modal { border-color: #c6d0db; background: #eef2f5; box-shadow: 0 30px 90px rgba(31, 42, 56, 0.3); }
 :root[data-theme="light"] .csv-close,

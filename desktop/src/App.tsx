@@ -194,12 +194,12 @@ function ResultsDashboard({ response, cardInterface }: { response: CardInspectio
       </section>
 
       <section className="panel csv-export-panel">
-        <div>
-          <p className="section-label">DIŞA AKTAR</p>
-          <h2>İnceleme verilerini CSV olarak sakla</h2>
-          <p>Bağlantı, uygulama, APDU ve maskelenmiş EMV tag bilgilerini Excel uyumlu bir CSV dosyasına dönüştür.</p>
+        <span className="csv-export-icon" aria-hidden="true">CSV</span>
+        <div className="csv-export-copy">
+          <h2>CSV raporu</h2>
+          <p>İnceleme verilerini önizle ve Excel uyumlu dosya olarak kaydet.</p>
         </div>
-        <button className="button button-primary" onClick={prepareCsv}>CSV’ye Dönüştür</button>
+        <button className="button button-primary csv-export-button" onClick={prepareCsv}>CSV’ye Dönüştür</button>
       </section>
 
       {csvDocument && (
