@@ -1,16 +1,21 @@
 import { displayTagValue, type InspectionViewModel } from "./inspectionParser";
 
+export type CsvField = {
+  name: string;
+  value: string;
+};
+
 export type CsvRow = {
   category: string;
   item: string;
-  field: string;
-  value: string;
+  fields: CsvField[];
 };
 
 export type CsvDocument = {
   fileName: string;
   content: string;
   rows: CsvRow[];
+  fieldPairCount: number;
 };
 
 function escapeCsv(value: string): string {
@@ -21,6 +26,19 @@ function fileTimestamp(date: Date): string {
   return date.toISOString().replace(/[:.]/g, "-");
 }
 
+function field(name: string, value: string): CsvField {
+  return { name, value };
+}
+
+function flattenRow(row: CsvRow, fieldPairCount: number): string[] {
+  const columns = [row.category, row.item];
+  for (let index = 0; index < fieldPairCount; index += 1) {
+    const currentField = row.fields[index];
+    columns.push(currentField?.name ?? "", currentField?.value ?? "");
+  }
+  return columns;
+}
+
 export function createInspectionCsv(
   data: InspectionViewModel,
   cardInterface: "contact" | "contactless",
@@ -28,65 +46,83 @@ export function createInspectionCsv(
   generatedAt = new Date()
 ): CsvDocument {
   const rows: CsvRow[] = [
-    { category: "İnceleme", item: "Genel", field: "Oluşturulma zamanı", value: generatedAt.toISOString() },
-    { category: "İnceleme", item: "Genel", field: "Kart arayüzü", value: cardInterface === "contactless" ? "Temassız" : "Temaslı" },
-    { category: "İnceleme", item: "Genel", field: "Toplam süre (ms)", value: String(durationMillis) },
-    { category: "Bağlantı", item: "Okuyucu", field: "Okuyucu adı", value: data.reader },
-    { category: "Bağlantı", item: "Kart", field: "Arayüz", value: data.interfaceName },
-    { category: "Bağlantı", item: "Kart", field: "Protokol", value: data.protocol },
-    { category: "Bağlantı", item: "Kart", field: "ATR", value: data.atr }
+    {
+      category: "İnceleme",
+      item: "Genel",
+      fields: [
+        field("Oluşturulma zamanı", generatedAt.toISOString()),
+        field("Kart arayüzü", cardInterface === "contactless" ? "Temassız" : "Temaslı"),
+        field("Toplam süre (ms)", String(durationMillis))
+      ]
+    },
+    { category: "Bağlantı", item: "Okuyucu", fields: [field("Okuyucu adı", data.reader)] },
+    {
+      category: "Bağlantı",
+      item: "Kart",
+      fields: [field("Arayüz", data.interfaceName), field("Protokol", data.protocol), field("ATR", data.atr)]
+    }
   ];
 
   data.applications.forEach((application, index) => {
-    const item = `Uygulama ${index + 1}`;
-    rows.push(
-      { category: "Ödeme uygulaması", item, field: "Şema", value: application.scheme },
-      { category: "Ödeme uygulaması", item, field: "AID", value: application.aid },
-      { category: "Ödeme uygulaması", item, field: "Dizin etiketi", value: application.directoryLabel },
-      { category: "Ödeme uygulaması", item, field: "Uygulama", value: application.name },
-      { category: "Ödeme uygulaması", item, field: "Tercih edilen ad", value: application.preferredName },
-      { category: "Ödeme uygulaması", item, field: "PDOL", value: application.pdol },
-      { category: "Ödeme uygulaması", item, field: "AIP", value: application.aip },
-      { category: "Ödeme uygulaması", item, field: "AFL", value: application.afl }
-    );
+    rows.push({
+      category: "Ödeme uygulaması",
+      item: `Uygulama ${index + 1}`,
+      fields: [
+        field("Şema", application.scheme),
+        field("AID", application.aid),
+        field("Dizin etiketi", application.directoryLabel),
+        field("Uygulama", application.name),
+        field("Tercih edilen ad", application.preferredName),
+        field("PDOL", application.pdol),
+        field("AIP", application.aip),
+        field("AFL", application.afl)
+      ]
+    });
   });
 
   data.commands.forEach((command, index) => {
-    const item = `${index + 1}. ${command.name}`;
-    rows.push(
-      { category: "APDU işlemi", item, field: "Komut", value: command.apdu },
-      { category: "APDU işlemi", item, field: "Durum kelimesi", value: command.statusWord },
-      { category: "APDU işlemi", item, field: "Durum", value: command.successful ? "Başarılı" : command.status },
-      { category: "APDU işlemi", item, field: "Süre", value: command.duration },
-      { category: "APDU işlemi", item, field: "Ayrıştırma", value: command.parseStatus }
-    );
-    command.notes.forEach((note, noteIndex) => rows.push({
+    rows.push({
       category: "APDU işlemi",
-      item,
-      field: `Not ${noteIndex + 1}`,
-      value: note
-    }));
+      item: `${index + 1}. ${command.name}`,
+      fields: [
+        field("Komut", command.apdu),
+        field("Durum kelimesi", command.statusWord),
+        field("Durum", command.successful ? "Başarılı" : command.status),
+        field("Süre", command.duration),
+        field("Ayrıştırma", command.parseStatus),
+        ...command.notes.map((note, noteIndex) => field(`Not ${noteIndex + 1}`, note))
+      ]
+    });
   });
 
   data.tags.forEach((tag, index) => {
-    const item = `${index + 1}. Tag ${tag.tag}`;
-    rows.push(
-      { category: "EMV tag", item, field: "Açıklama", value: tag.name },
-      { category: "EMV tag", item, field: "Tür", value: tag.type === "constructed" ? "Yapılandırılmış" : "Basit" },
-      { category: "EMV tag", item, field: "Uzunluk (byte)", value: String(tag.length) },
-      { category: "EMV tag", item, field: "Değer", value: displayTagValue(tag) },
-      { category: "EMV tag", item, field: "Hassas", value: tag.sensitive ? "Evet (maskeli)" : "Hayır" }
-    );
+    rows.push({
+      category: "EMV tag",
+      item: `${index + 1}. Tag ${tag.tag}`,
+      fields: [
+        field("Açıklama", tag.name),
+        field("Tür", tag.type === "constructed" ? "Yapılandırılmış" : "Basit"),
+        field("Uzunluk (byte)", String(tag.length)),
+        field("Değer", displayTagValue(tag)),
+        field("Hassas", tag.sensitive ? "Evet (maskeli)" : "Hayır")
+      ]
+    });
   });
 
-  const header = ["Kategori", "Kayıt", "Alan", "Değer"];
-  const content = "\uFEFF" + [header, ...rows.map((row) => [row.category, row.item, row.field, row.value])]
+  const fieldPairCount = Math.max(0, ...rows.map((row) => row.fields.length));
+  const header = ["Kategori", "Kayıt"];
+  for (let index = 1; index <= fieldPairCount; index += 1) {
+    header.push(`Alan ${index}`, `Değer ${index}`);
+  }
+
+  const content = "\uFEFF" + [header, ...rows.map((row) => flattenRow(row, fieldPairCount))]
     .map((columns) => columns.map(escapeCsv).join(";"))
     .join("\r\n");
 
   return {
     fileName: `emv-inceleme-${fileTimestamp(generatedAt)}.csv`,
     content,
-    rows
+    rows,
+    fieldPairCount
   };
 }

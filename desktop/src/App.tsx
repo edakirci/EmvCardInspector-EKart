@@ -215,10 +215,23 @@ function ResultsDashboard({ response, cardInterface }: { response: CardInspectio
             </div>
             <div className="table-scroll csv-preview-scroll">
               <table className="data-table">
-                <thead><tr><th>Kategori</th><th>Kayıt</th><th>Alan</th><th>Değer</th></tr></thead>
+                <thead><tr>
+                  <th>Kategori</th><th>Kayıt</th>
+                  {Array.from({ length: csvDocument.fieldPairCount }, (_, index) => (
+                    <Fragment key={`csv-header-${index}`}><th>Alan {index + 1}</th><th>Değer {index + 1}</th></Fragment>
+                  ))}
+                </tr></thead>
                 <tbody>{csvDocument.rows.map((row, index) => (
-                  <tr key={`${row.category}-${row.item}-${row.field}-${index}`}>
-                    <td>{row.category}</td><td>{row.item}</td><td>{row.field}</td><td><code>{row.value}</code></td>
+                  <tr key={`${row.category}-${row.item}-${index}`}>
+                    <td>{row.category}</td><td>{row.item}</td>
+                    {Array.from({ length: csvDocument.fieldPairCount }, (_, fieldIndex) => {
+                      const csvField = row.fields[fieldIndex];
+                      return (
+                        <Fragment key={`${row.category}-${row.item}-${fieldIndex}`}>
+                          <td>{csvField?.name ?? ""}</td><td><code>{csvField?.value ?? ""}</code></td>
+                        </Fragment>
+                      );
+                    })}
                   </tr>
                 ))}</tbody>
               </table>
